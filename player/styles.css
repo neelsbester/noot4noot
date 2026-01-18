@@ -591,6 +591,63 @@ body {
   border-color: var(--success);
 }
 
+/* Scanner hidden state (when track is playing) */
+.scanner-container.scanner-hidden .scanner {
+  display: none;
+}
+
+.scanner-container.scanner-hidden .scan-another-btn {
+  display: flex;
+}
+
+/* Scan Another Code Button */
+.scan-another-btn {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  width: min(320px, 85vw);
+  height: min(320px, 85vw);
+  background: var(--bg-card);
+  border: 2px dashed rgba(255, 255, 255, 0.2);
+  border-radius: var(--radius-lg);
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.scan-another-btn:hover {
+  background: var(--bg-elevated);
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+}
+
+.scan-another-btn:hover svg {
+  color: var(--accent-primary);
+}
+
+.scan-another-btn svg {
+  width: 48px;
+  height: 48px;
+  color: var(--text-muted);
+  transition: color var(--transition-base);
+}
+
+.scan-another-btn[hidden] {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .scan-another-btn {
+    width: min(400px, 85vw);
+    height: min(400px, 85vw);
+  }
+}
+
 /* ==========================================================================
    Now Playing
    ========================================================================== */

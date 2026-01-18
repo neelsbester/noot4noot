@@ -17,7 +17,9 @@ import {
   updatePlayButton,
   updateRevealButton,
   revealSongInfo,
-  updatePlayerHeader
+  updatePlayerHeader,
+  hideScannerShowButton,
+  showScannerHideButton
 } from './ui.js';
 
 // Storage keys
@@ -467,6 +469,7 @@ function setupPlayerHandlers() {
   const pauseBtn = document.getElementById('pause-btn');
   const revealBtn = document.getElementById('reveal-btn');
   const changeDeviceBtn = document.getElementById('change-device-btn');
+  const scanAnotherBtn = document.getElementById('scan-another-btn');
 
   if (pauseBtn) {
     const newPauseBtn = pauseBtn.cloneNode(true);
@@ -485,6 +488,20 @@ function setupPlayerHandlers() {
     changeDeviceBtn.parentNode.replaceChild(newChangeDeviceBtn, changeDeviceBtn);
     newChangeDeviceBtn.addEventListener('click', handleChangeDevice);
   }
+
+  if (scanAnotherBtn) {
+    const newScanAnotherBtn = scanAnotherBtn.cloneNode(true);
+    scanAnotherBtn.parentNode.replaceChild(newScanAnotherBtn, scanAnotherBtn);
+    newScanAnotherBtn.addEventListener('click', handleScanAnother);
+  }
+}
+
+/**
+ * Handle "Scan Another Code" button click
+ */
+function handleScanAnother() {
+  showScannerHideButton();
+  showToast('Ready to scan!', 'info', 1500);
 }
 
 /**
@@ -531,6 +548,9 @@ async function handleScan(spotifyUri) {
     updateNowPlaying(track, false);
     updatePlayButton(true);
     updateRevealButton(true, false);
+
+    // Hide scanner and show "Scan Another Code" button
+    hideScannerShowButton();
 
     showToast('Now playing!', 'success', 2000);
 

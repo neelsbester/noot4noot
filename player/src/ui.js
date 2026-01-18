@@ -334,3 +334,32 @@ export function clearDebugLog() {
   }
 }
 
+/**
+ * Hide the scanner and show the "Scan Another Code" button
+ */
+export function hideScannerShowButton() {
+  const scannerContainer = document.querySelector('.scanner-container');
+  if (scannerContainer) {
+    scannerContainer.classList.add('scanner-hidden');
+  }
+}
+
+/**
+ * Show the scanner and hide the "Scan Another Code" button
+ */
+export function showScannerHideButton() {
+  const scannerContainer = document.querySelector('.scanner-container');
+  if (scannerContainer) {
+    scannerContainer.classList.remove('scanner-hidden');
+  }
+}
+
+/**
+ * Check if scanner is currently hidden
+ * @returns {boolean}
+ */
+export function isScannerHidden() {
+  const scannerContainer = document.querySelector('.scanner-container');
+  return scannerContainer?.classList.contains('scanner-hidden') ?? false;
+}
+
