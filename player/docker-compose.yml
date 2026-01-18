@@ -1,0 +1,14 @@
+services:
+  noot4noot:
+    build:
+      context: .
+      args:
+        VITE_SPOTIFY_CLIENT_ID: ${VITE_SPOTIFY_CLIENT_ID}
+    container_name: noot4noot
+    restart: unless-stopped
+    networks:
+      - plex-network
+
+networks:
+  plex-network:
+    external: true
