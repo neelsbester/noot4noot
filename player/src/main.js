@@ -1,21 +1,23 @@
 /**
  * Hitster Player - Main Application
- * 
- * Ties together authentication, QR scanning, and Spotify playback.
+ *
+ * Supports two playback modes:
+ * - SDK: Full tracks via Spotify Web Playback SDK (in-browser)
+ * - External: Full tracks via Spotify Connect devices
  */
 
 import { login, handleCallback, getStoredToken, clearToken } from './auth.js';
 import { QRScanner } from './scanner.js';
-import { SpotifyPlayer } from './player.js';
-import { 
-  showToast, 
-  showScreen, 
-  createDeviceItem, 
+import { PlayerFactory } from './player-factory.js';
+import {
+  showToast,
+  showScreen,
+  createDeviceItem,
   updateNowPlaying,
   updatePlayButton,
   updateRevealButton,
-  setDeviceName,
-  revealSongInfo
+  revealSongInfo,
+  updatePlayerHeader
 } from './ui.js';
 
 // Storage keys
@@ -24,6 +26,7 @@ const DEVICE_KEY = 'hitster_selected_device';
 // Application state
 let player = null;
 let scanner = null;
+let currentMode = null;
 let selectedDevice = null;
 let isYearRevealed = false;
 
@@ -65,10 +68,10 @@ function clearSavedDevice() {
 async function init() {
   console.log('Hitster Player initializing...');
 
-  // Check for OAuth callback (async for PKCE token exchange)
+  // Check for OAuth callback
   try {
     const callbackResult = await handleCallback();
-    
+
     if (callbackResult?.error) {
       console.error('Callback error:', callbackResult.error);
       showToast('Login failed: ' + callbackResult.error, 'error');
@@ -77,10 +80,10 @@ async function init() {
       return;
     }
 
-    // If we just got a token from callback, use it
+    // If we just got a token from callback, go to device selection
     if (callbackResult?.accessToken) {
-      console.log('Got token from callback, initializing player...');
-      await initializePlayer(callbackResult.accessToken);
+      console.log('Got token from callback');
+      await initializeWithToken(callbackResult.accessToken);
       return;
     }
   } catch (err) {
@@ -90,10 +93,10 @@ async function init() {
 
   // Check for existing stored token
   const token = getStoredToken();
-  
+
   if (token) {
     console.log('Found existing token');
-    await initializePlayer(token);
+    await initializeWithToken(token);
   } else {
     console.log('No token found, showing login screen');
     showScreen('login-screen');
@@ -106,57 +109,41 @@ async function init() {
  */
 function setupLoginHandlers() {
   const loginBtn = document.getElementById('login-btn');
+
   if (loginBtn) {
-    loginBtn.addEventListener('click', async () => {
+    const newLoginBtn = loginBtn.cloneNode(true);
+    loginBtn.parentNode.replaceChild(newLoginBtn, loginBtn);
+    newLoginBtn.addEventListener('click', async () => {
       await login();
     });
   }
 }
 
 /**
- * Initialize the Spotify player with a token
+ * Initialize with a valid token
  * @param {string} token - Spotify access token
  */
-async function initializePlayer(token) {
+async function initializeWithToken(token) {
   try {
-    player = new SpotifyPlayer(token);
-    
-    // Verify token by getting user profile
-    const user = await player.getUserProfile();
-    console.log('Logged in as:', user.display_name);
-    
-    // Check for saved device - try to restore previous session
-    const savedDevice = getSavedDevice();
-    if (savedDevice) {
-      console.log('Found saved device:', savedDevice.name);
-      
-      // Verify the device is still available
-      const devices = await player.getDevices();
-      const deviceStillAvailable = devices.find(d => d.id === savedDevice.id);
-      
-      if (deviceStillAvailable) {
-        // Device is available - go straight to scanning!
-        console.log('Saved device still available, resuming session');
-        selectedDevice = deviceStillAvailable;
-        player.setDevice(savedDevice.id);
-        showToast(`Resuming on ${savedDevice.name}`, 'success', 2000);
-        await startScanning();
-        return;
-      } else {
-        // Device no longer available
-        console.log('Saved device no longer available');
-        clearSavedDevice();
-        showToast('Previous device unavailable. Please select a new one.', 'warning');
-      }
+    // Verify token works
+    const response = await fetch('https://api.spotify.com/v1/me', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+
+    if (!response.ok) {
+      throw new Error('Token expired');
     }
-    
-    // No saved device or device unavailable - show device selection
+
+    const user = await response.json();
+    console.log('Logged in as:', user.display_name);
     showToast(`Welcome, ${user.display_name}!`, 'success');
-    await showDeviceSelection();
-    
+
+    // Show device selection
+    await showDeviceSelection(token);
+
   } catch (error) {
-    console.error('Failed to initialize player:', error);
-    
+    console.error('Failed to initialize:', error);
+
     if (error.message.includes('expired') || error.message.includes('401')) {
       clearToken();
       clearSavedDevice();
@@ -170,33 +157,34 @@ async function initializePlayer(token) {
 }
 
 /**
- * Show device selection screen and load devices
+ * Show device selection screen
+ * @param {string} token - Spotify access token
  */
-async function showDeviceSelection() {
+async function showDeviceSelection(token) {
   showScreen('setup-screen');
-  setupDeviceHandlers();
-  await refreshDevices();
+  setupDeviceHandlers(token);
+  await refreshDevices(token);
 }
 
 /**
  * Set up device selection screen handlers
+ * @param {string} token - Spotify access token
  */
-function setupDeviceHandlers() {
+function setupDeviceHandlers(token) {
   const refreshBtn = document.getElementById('refresh-devices-btn');
   const startBtn = document.getElementById('start-scanning-btn');
   const devicesList = document.getElementById('devices-list');
 
-  // Remove old listeners by cloning elements
   if (refreshBtn) {
     const newRefreshBtn = refreshBtn.cloneNode(true);
     refreshBtn.parentNode.replaceChild(newRefreshBtn, refreshBtn);
-    newRefreshBtn.addEventListener('click', refreshDevices);
+    newRefreshBtn.addEventListener('click', () => refreshDevices(token));
   }
 
   if (startBtn) {
     const newStartBtn = startBtn.cloneNode(true);
     startBtn.parentNode.replaceChild(newStartBtn, startBtn);
-    newStartBtn.addEventListener('click', startScanning);
+    newStartBtn.addEventListener('click', () => startPlayback(token));
   }
 
   if (devicesList) {
@@ -205,7 +193,7 @@ function setupDeviceHandlers() {
     newDevicesList.addEventListener('click', (e) => {
       const deviceItem = e.target.closest('.device-item');
       if (deviceItem) {
-        selectDevice(deviceItem.dataset.deviceId);
+        selectDevice(deviceItem.dataset.deviceId, token);
       }
     });
   }
@@ -213,44 +201,67 @@ function setupDeviceHandlers() {
 
 /**
  * Refresh the list of available Spotify devices
+ * @param {string} token - Spotify access token
  */
-async function refreshDevices() {
+async function refreshDevices(token) {
   const devicesList = document.getElementById('devices-list');
   const startBtn = document.getElementById('start-scanning-btn');
-  
-  if (!player) return;
 
   try {
     devicesList.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 2rem;">Loading devices...</p>';
-    
-    const devices = await player.getDevices();
-    
-    if (devices.length === 0) {
-      devicesList.innerHTML = `
-        <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
-          <p>No devices found</p>
-          <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.5rem;">
-            Open Spotify on a device to make it available
-          </p>
-        </div>
-      `;
-      startBtn.disabled = true;
-      return;
+
+    const response = await fetch('https://api.spotify.com/v1/me/player/devices', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to get devices');
     }
 
+    const data = await response.json();
+    const devices = data.devices || [];
+
+    // Add "This Browser" as SDK option at the top
+    const sdkDevice = {
+      id: 'SDK_BROWSER',
+      name: 'This Browser',
+      type: 'Computer',
+      is_active: false,
+      is_sdk: true
+    };
+
+    const allDevices = [sdkDevice, ...devices];
+
     // Render devices
-    devicesList.innerHTML = devices.map(device => 
-      createDeviceItem(device, device.id === selectedDevice?.id)
+    devicesList.innerHTML = allDevices.map(device =>
+      createDeviceItemWithSdk(device, device.id === selectedDevice?.id)
     ).join('');
+
+    if (devices.length === 0) {
+      devicesList.innerHTML += `
+        <div style="text-align: center; padding: 1rem; color: var(--text-muted);">
+          <p style="font-size: 0.85rem;">No external devices found</p>
+          <p style="font-size: 0.8rem; margin-top: 0.25rem;">Open Spotify on a device to see it here</p>
+        </div>
+      `;
+    }
+
+    // Check for saved device
+    const savedDevice = getSavedDevice();
+    if (savedDevice && !selectedDevice) {
+      const stillAvailable = allDevices.find(d => d.id === savedDevice.id);
+      if (stillAvailable) {
+        selectDevice(savedDevice.id, token, allDevices);
+      }
+    }
 
     // Auto-select active device if none selected
     if (!selectedDevice) {
       const activeDevice = devices.find(d => d.is_active);
       if (activeDevice) {
-        selectDevice(activeDevice.id, devices);
+        selectDevice(activeDevice.id, token, allDevices);
       }
     } else {
-      // Re-enable start button if we have a selected device
       startBtn.disabled = false;
     }
 
@@ -267,26 +278,57 @@ async function refreshDevices() {
 }
 
 /**
- * Select a device for playback
- * @param {string} deviceId - Device ID to select
- * @param {Array} devices - Optional devices array (to avoid re-fetching)
+ * Create device item HTML with SDK support
  */
-async function selectDevice(deviceId, devices = null) {
+function createDeviceItemWithSdk(device, isSelected = false) {
+  if (device.is_sdk) {
+    const selectedClass = isSelected ? 'selected' : '';
+    return `
+      <div class="device-item ${selectedClass}" data-device-id="${device.id}">
+        <div class="device-icon" style="background: rgba(29, 185, 84, 0.15); color: var(--spotify-green);">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+            <line x1="8" y1="21" x2="16" y2="21"/>
+            <line x1="12" y1="17" x2="12" y2="21"/>
+          </svg>
+        </div>
+        <div class="device-info">
+          <div class="device-item-name">${device.name}</div>
+          <div class="device-item-type">Play full tracks in this browser</div>
+        </div>
+      </div>
+    `;
+  }
+
+  return createDeviceItem(device, isSelected);
+}
+
+/**
+ * Select a device for playback
+ */
+async function selectDevice(deviceId, token, devices = null) {
   const startBtn = document.getElementById('start-scanning-btn');
-  
-  // Get devices if not provided
+
   if (!devices) {
-    devices = await player.getDevices();
+    const response = await fetch('https://api.spotify.com/v1/me/player/devices', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await response.json();
+    devices = [
+      { id: 'SDK_BROWSER', name: 'This Browser', type: 'Computer', is_sdk: true },
+      ...(data.devices || [])
+    ];
   }
 
   const device = devices.find(d => d.id === deviceId);
   if (!device) return;
 
   selectedDevice = device;
-  player.setDevice(deviceId);
-  
-  // Save to localStorage for session persistence
-  saveDevice(device);
+
+  // Save external devices for session persistence
+  if (!device.is_sdk) {
+    saveDevice(device);
+  }
 
   // Update UI
   document.querySelectorAll('.device-item').forEach(item => {
@@ -298,29 +340,120 @@ async function selectDevice(deviceId, devices = null) {
 }
 
 /**
- * Start the scanning interface
+ * Start playback with selected device
  */
-async function startScanning() {
+async function startPlayback(token) {
   if (!selectedDevice) {
-    showToast('Please select a device first', 'warning');
+    showToast('Please select a playback option', 'warning');
     return;
   }
 
+  try {
+    if (selectedDevice.is_sdk) {
+      currentMode = 'sdk';
+      await initializeSDKPlayer(token);
+    } else {
+      currentMode = 'external';
+      await initializeExternalPlayer(token);
+    }
+  } catch (error) {
+    console.error('Failed to start playback:', error);
+    showToast(error.message, 'error');
+  }
+}
+
+/**
+ * Initialize SDK player for in-browser playback
+ */
+async function initializeSDKPlayer(token) {
+  console.log('Initializing SDK player');
+
+  player = PlayerFactory.create('sdk');
+
+  try {
+    await player.initialize({
+      token,
+      name: 'Hitster Web Player',
+      volume: 50,
+      getToken: () => getStoredToken()
+    });
+
+    player.onTrackEnd = () => {
+      showToast('Track ended', 'info', 2000);
+    };
+
+    player.onError = (error) => {
+      console.error('SDK player error:', error);
+      if (error.message.includes('Premium')) {
+        showToast('Spotify Premium required for in-browser playback', 'error', 5000);
+        return;
+      }
+      showToast(error.message, 'error');
+    };
+
+    player.onStateChange = ({ isPlaying }) => {
+      updatePlayButton(isPlaying);
+    };
+
+    showScreen('player-screen');
+    updatePlayerHeader('sdk');
+    setupPlayerHandlers();
+    await startScanner();
+
+    showToast('Playing in browser', 'success', 3000);
+
+  } catch (error) {
+    console.error('Failed to initialize SDK player:', error);
+
+    if (error.message.includes('Premium') || error.message.includes('account')) {
+      showToast('Premium required for in-browser playback. Select an external device.', 'warning', 5000);
+      player.destroy();
+      player = null;
+      selectedDevice = null;
+      await showDeviceSelection(token);
+    } else {
+      throw error;
+    }
+  }
+}
+
+/**
+ * Initialize external device player
+ */
+async function initializeExternalPlayer(token) {
+  console.log('Initializing external device player for:', selectedDevice.name);
+
+  player = PlayerFactory.create('external');
+  await player.initialize({ token });
+  player.setDevice(selectedDevice.id, selectedDevice.name);
+
+  player.onError = (error) => {
+    console.error('External player error:', error);
+    showToast(error.message, 'error');
+  };
+
   showScreen('player-screen');
-  setDeviceName(selectedDevice.name);
+  updatePlayerHeader('external', selectedDevice.name);
   setupPlayerHandlers();
-  
-  // Initialize scanner
+  await startScanner();
+
+  showToast(`Playing on ${selectedDevice.name}`, 'success', 3000);
+}
+
+/**
+ * Start the QR scanner
+ */
+async function startScanner() {
   try {
     scanner = new QRScanner('scanner', {
       onScan: handleScan,
       onError: (message) => showToast(message, 'error'),
       cooldownMs: 3000
     });
-    
+
     await scanner.start();
     showToast('Scanner ready!', 'success', 2000);
-    
+
   } catch (error) {
     console.error('Failed to start scanner:', error);
     showToast('Failed to start camera: ' + error.message, 'error');
@@ -335,7 +468,6 @@ function setupPlayerHandlers() {
   const revealBtn = document.getElementById('reveal-btn');
   const changeDeviceBtn = document.getElementById('change-device-btn');
 
-  // Remove old listeners by cloning elements
   if (pauseBtn) {
     const newPauseBtn = pauseBtn.cloneNode(true);
     pauseBtn.parentNode.replaceChild(newPauseBtn, pauseBtn);
@@ -351,60 +483,63 @@ function setupPlayerHandlers() {
   if (changeDeviceBtn) {
     const newChangeDeviceBtn = changeDeviceBtn.cloneNode(true);
     changeDeviceBtn.parentNode.replaceChild(newChangeDeviceBtn, changeDeviceBtn);
-    newChangeDeviceBtn.addEventListener('click', async () => {
-      if (scanner) {
-        await scanner.stop();
-      }
-      clearSavedDevice(); // Clear saved device when manually changing
-      await showDeviceSelection();
-    });
+    newChangeDeviceBtn.addEventListener('click', handleChangeDevice);
+  }
+}
+
+/**
+ * Handle change device button
+ */
+async function handleChangeDevice() {
+  if (scanner) {
+    await scanner.stop();
+    scanner = null;
+  }
+
+  if (player) {
+    player.destroy();
+    player = null;
+  }
+
+  clearSavedDevice();
+  selectedDevice = null;
+  currentMode = null;
+
+  const token = getStoredToken();
+  if (token) {
+    await showDeviceSelection(token);
+  } else {
+    showScreen('login-screen');
+    setupLoginHandlers();
   }
 }
 
 /**
  * Handle a successful QR scan
- * @param {string} spotifyUri - Spotify track URI
  */
 async function handleScan(spotifyUri) {
   console.log('Playing:', spotifyUri);
-  
-  // Reset reveal state
+
   isYearRevealed = false;
-  
+
   try {
-    // Show loading state
     updateNowPlaying(null);
     showToast('Loading track...', 'info', 1500);
-    
-    // Play the track
+
     const track = await player.play(spotifyUri);
-    
-    // Update UI
+
     updateNowPlaying(track, false);
     updatePlayButton(true);
     updateRevealButton(true, false);
-    
+
     showToast('Now playing!', 'success', 2000);
-    
+
   } catch (error) {
     console.error('Playback error:', error);
     showToast(error.message, 'error');
-    
-    // If device issue, try to help the user
+
     if (error.message.includes('device') || error.message.includes('No active')) {
-      showToast('Device unavailable - tap to refresh', 'warning', 5000);
-      
-      // Check if device is still available
-      try {
-        const devices = await player.getDevices();
-        const stillAvailable = devices.find(d => d.id === selectedDevice?.id);
-        
-        if (!stillAvailable) {
-          showToast('Device went offline. Open Spotify and try again.', 'error', 5000);
-        }
-      } catch (e) {
-        console.error('Failed to check devices:', e);
-      }
+      showToast('Device unavailable - check Spotify is open', 'warning', 5000);
     }
   }
 }
@@ -414,7 +549,7 @@ async function handleScan(spotifyUri) {
  */
 async function togglePlayback() {
   if (!player) return;
-  
+
   try {
     const isPlaying = await player.togglePlayback();
     updatePlayButton(isPlaying);
@@ -425,7 +560,7 @@ async function togglePlayback() {
 }
 
 /**
- * Reveal all song info (album art, title, artist, year)
+ * Reveal song info
  */
 function handleReveal() {
   isYearRevealed = true;
@@ -440,19 +575,12 @@ if (document.readyState === 'loading') {
   init();
 }
 
-// Handle visibility changes (pause scanning when tab hidden)
-document.addEventListener('visibilitychange', () => {
-  if (document.hidden && scanner?.running) {
-    console.log('Tab hidden, scanner continues in background');
-  }
-});
-
 // Export for debugging
 window.hitsterDebug = {
   getPlayer: () => player,
   getScanner: () => scanner,
   getSelectedDevice: () => selectedDevice,
-  getSavedDevice,
+  getCurrentMode: () => currentMode,
   clearSavedDevice,
   clearToken,
   login

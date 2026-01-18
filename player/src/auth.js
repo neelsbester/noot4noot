@@ -21,7 +21,9 @@ const SCOPES = [
   'user-modify-playback-state',  // Start/stop/skip playback
   'user-read-playback-state',    // Get current playback info
   'user-read-currently-playing', // Get currently playing track
-  'streaming'                     // Web Playback SDK (optional)
+  'streaming',                   // Web Playback SDK
+  'user-read-email',             // Required by Web Playback SDK
+  'user-read-private'            // Required by Web Playback SDK
 ].join(' ');
 
 // Token storage keys
@@ -234,7 +236,25 @@ export function isAuthenticated() {
 export function getTokenTimeRemaining() {
   const expiry = localStorage.getItem(TOKEN_EXPIRY_KEY);
   if (!expiry) return 0;
-  
+
   const remaining = parseInt(expiry, 10) - Date.now();
   return Math.max(0, remaining);
+}
+
+/**
+ * Check if a playback mode requires authentication
+ * @param {string} mode - 'preview', 'sdk', or 'external'
+ * @returns {boolean}
+ */
+export function isAuthRequired(mode) {
+  return mode !== 'preview';
+}
+
+/**
+ * Check if a playback mode requires Spotify Premium
+ * @param {string} mode - 'preview', 'sdk', or 'external'
+ * @returns {boolean}
+ */
+export function isPremiumRequired(mode) {
+  return mode !== 'preview';
 }

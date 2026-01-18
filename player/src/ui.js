@@ -209,3 +209,128 @@ export function setLoading(element, isLoading) {
   }
 }
 
+/**
+ * Get stored playback mode
+ * @returns {string|null} Stored mode or null
+ */
+export function getStoredMode() {
+  return localStorage.getItem('hitster_playback_mode');
+}
+
+/**
+ * Save playback mode to localStorage
+ * @param {string} mode - 'sdk' or 'external'
+ */
+export function saveMode(mode) {
+  localStorage.setItem('hitster_playback_mode', mode);
+}
+
+/**
+ * Clear stored playback mode
+ */
+export function clearStoredMode() {
+  localStorage.removeItem('hitster_playback_mode');
+}
+
+/**
+ * Update player header to show current mode
+ * @param {string} mode - 'sdk' or 'external'
+ * @param {string} [deviceName] - Device name for external mode
+ */
+export function updatePlayerHeader(mode, deviceName = null) {
+  const deviceLabel = document.querySelector('.device-label');
+  const deviceNameEl = document.getElementById('device-name');
+  const changeDeviceBtn = document.getElementById('change-device-btn');
+
+  if (!deviceLabel || !deviceNameEl) return;
+
+  switch (mode) {
+    case 'sdk':
+      deviceLabel.textContent = 'Playing in';
+      deviceNameEl.textContent = 'This Browser';
+      if (changeDeviceBtn) {
+        changeDeviceBtn.title = 'Change playback';
+      }
+      break;
+
+    case 'external':
+      deviceLabel.textContent = 'Playing on';
+      deviceNameEl.textContent = deviceName || '---';
+      if (changeDeviceBtn) {
+        changeDeviceBtn.title = 'Change device';
+      }
+      break;
+  }
+}
+
+/**
+ * Get icon SVG for playback mode
+ * @param {string} mode - 'sdk' or 'external'
+ * @returns {string} SVG HTML
+ */
+export function getModeIcon(mode) {
+  const icons = {
+    sdk: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+      <line x1="8" y1="21" x2="16" y2="21"/>
+      <line x1="12" y1="17" x2="12" y2="21"/>
+    </svg>`,
+    external: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
+      <polyline points="17 2 12 7 7 2"/>
+    </svg>`
+  };
+
+  return icons[mode] || icons.external;
+}
+
+/**
+ * Show/hide the debug panel
+ * @param {boolean} show
+ */
+export function showDebugPanel(show = true) {
+  const panel = document.getElementById('debug-panel');
+  if (panel) {
+    panel.hidden = !show;
+  }
+}
+
+/**
+ * Add a message to the on-screen debug panel
+ * @param {string} message - Message to display
+ * @param {string} type - 'info', 'success', 'error'
+ */
+export function debugLog(message, type = 'info') {
+  // Also log to console
+  console.log(`[Debug] ${message}`);
+
+  const debugLogEl = document.getElementById('debug-log');
+  if (!debugLogEl) return;
+
+  const entry = document.createElement('p');
+  entry.className = `debug-entry ${type}`;
+
+  const timestamp = new Date().toLocaleTimeString();
+  entry.innerHTML = `<span class="timestamp">${timestamp}</span> ${escapeHtml(message)}`;
+
+  debugLogEl.appendChild(entry);
+
+  // Auto-scroll to bottom
+  debugLogEl.scrollTop = debugLogEl.scrollHeight;
+
+  // Limit entries to prevent memory issues
+  while (debugLogEl.children.length > 50) {
+    debugLogEl.removeChild(debugLogEl.firstChild);
+  }
+}
+
+/**
+ * Clear the debug panel
+ */
+export function clearDebugLog() {
+  const debugLogEl = document.getElementById('debug-log');
+  if (debugLogEl) {
+    debugLogEl.innerHTML = '<p class="debug-entry info">Debug log cleared</p>';
+  }
+}
+
