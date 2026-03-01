@@ -1,6 +1,6 @@
 /**
  * UI Helper Module
- * 
+ *
  * Toast notifications and UI state management.
  */
 
@@ -19,6 +19,12 @@ export function showToast(message, type = 'info', duration = 3000) {
   toast.textContent = message;
 
   container.appendChild(toast);
+
+  // U7: Max toast limit — remove oldest if more than 2 visible
+  const toasts = container.querySelectorAll('.toast');
+  if (toasts.length > 2) {
+    toasts[0].remove();
+  }
 
   // Auto-remove after duration
   setTimeout(() => {
@@ -40,6 +46,13 @@ export function showScreen(screenId) {
   screens.forEach(screen => {
     screen.hidden = screen.id !== screenId;
   });
+
+  // U5: Focus management — focus first focusable element in target screen
+  const targetScreen = document.getElementById(screenId);
+  if (targetScreen) {
+    const firstFocusable = targetScreen.querySelector('button, [href], input, select, [tabindex]:not([tabindex="-1"])');
+    if (firstFocusable) firstFocusable.focus();
+  }
 }
 
 /**
@@ -52,10 +65,10 @@ export function createDeviceItem(device, isSelected = false) {
   const iconSvg = getDeviceIconSvg(device.type);
   const activeClass = device.is_active ? 'active' : '';
   const selectedClass = isSelected ? 'selected' : '';
-  
+
+  // U2: Escape device.id to prevent XSS; U4: removed dead empty template literal
   return `
-    <div class="device-item ${activeClass} ${selectedClass}" data-device-id="${device.id}">
-      ${device.is_active ? '' : ''}
+    <div class="device-item ${activeClass} ${selectedClass}" data-device-id="${escapeHtml(device.id)}">
       <div class="device-icon">${iconSvg}</div>
       <div class="device-info">
         <div class="device-item-name">${escapeHtml(device.name)}</div>
@@ -99,7 +112,7 @@ function getDeviceIconSvg(type) {
       <polygon points="10 8 16 12 10 16 10 8"/>
     </svg>`
   };
-  
+
   return icons[type?.toLowerCase()] || icons.default;
 }
 
@@ -120,9 +133,11 @@ export function escapeHtml(text) {
  * @param {boolean} revealed - Whether to reveal all song info (album art, title, artist, year)
  */
 export function updateNowPlaying(track, revealed = false) {
+  // U1: Null guards
   const placeholder = document.querySelector('.now-playing-placeholder');
   const content = document.querySelector('.now-playing-content');
-  
+  if (!placeholder || !content) return;
+
   if (!track) {
     placeholder.hidden = false;
     content.hidden = true;
@@ -138,9 +153,13 @@ export function updateNowPlaying(track, revealed = false) {
   document.getElementById('album-art').src = track.albumArt || '';
   document.getElementById('track-name').textContent = track.name;
   document.getElementById('artist-name').textContent = track.artistString;
-  
+
+  // U6: Don't reveal year until explicit reveal — store in dataset
   const yearEl = document.getElementById('track-year');
-  yearEl.textContent = track.year || '???';
+  if (yearEl) {
+    yearEl.textContent = ''; // Don't reveal year - game integrity
+    yearEl.dataset.year = track.year || '';
+  }
 }
 
 /**
@@ -150,6 +169,12 @@ export function revealSongInfo() {
   const content = document.querySelector('.now-playing-content');
   if (content) {
     content.classList.add('revealed');
+  }
+
+  // U6: Reveal the year from dataset
+  const yearEl = document.getElementById('track-year');
+  if (yearEl) {
+    yearEl.textContent = yearEl.dataset.year || '???';
   }
 }
 
@@ -161,12 +186,12 @@ export function updatePlayButton(isPlaying) {
   const pauseIcon = document.getElementById('pause-icon');
   const playIcon = document.getElementById('play-icon');
   const pauseBtn = document.getElementById('pause-btn');
-  
+
   if (pauseIcon && playIcon) {
     pauseIcon.hidden = !isPlaying;
     playIcon.hidden = isPlaying;
   }
-  
+
   if (pauseBtn) {
     pauseBtn.disabled = false;
   }
@@ -210,29 +235,6 @@ export function setLoading(element, isLoading) {
 }
 
 /**
- * Get stored playback mode
- * @returns {string|null} Stored mode or null
- */
-export function getStoredMode() {
-  return localStorage.getItem('hitster_playback_mode');
-}
-
-/**
- * Save playback mode to localStorage
- * @param {string} mode - 'sdk' or 'external'
- */
-export function saveMode(mode) {
-  localStorage.setItem('hitster_playback_mode', mode);
-}
-
-/**
- * Clear stored playback mode
- */
-export function clearStoredMode() {
-  localStorage.removeItem('hitster_playback_mode');
-}
-
-/**
  * Update player header to show current mode
  * @param {string} mode - 'sdk' or 'external'
  * @param {string} [deviceName] - Device name for external mode
@@ -260,38 +262,6 @@ export function updatePlayerHeader(mode, deviceName = null) {
         changeDeviceBtn.title = 'Change device';
       }
       break;
-  }
-}
-
-/**
- * Get icon SVG for playback mode
- * @param {string} mode - 'sdk' or 'external'
- * @returns {string} SVG HTML
- */
-export function getModeIcon(mode) {
-  const icons = {
-    sdk: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
-      <line x1="8" y1="21" x2="16" y2="21"/>
-      <line x1="12" y1="17" x2="12" y2="21"/>
-    </svg>`,
-    external: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
-      <polyline points="17 2 12 7 7 2"/>
-    </svg>`
-  };
-
-  return icons[mode] || icons.external;
-}
-
-/**
- * Show/hide the debug panel
- * @param {boolean} show
- */
-export function showDebugPanel(show = true) {
-  const panel = document.getElementById('debug-panel');
-  if (panel) {
-    panel.hidden = !show;
   }
 }
 
@@ -325,22 +295,18 @@ export function debugLog(message, type = 'info') {
 }
 
 /**
- * Clear the debug panel
- */
-export function clearDebugLog() {
-  const debugLogEl = document.getElementById('debug-log');
-  if (debugLogEl) {
-    debugLogEl.innerHTML = '<p class="debug-entry info">Debug log cleared</p>';
-  }
-}
-
-/**
  * Hide the scanner and show the "Scan Another Code" button
  */
 export function hideScannerShowButton() {
   const scannerContainer = document.querySelector('.scanner-container');
   if (scannerContainer) {
     scannerContainer.classList.add('scanner-hidden');
+  }
+
+  // M7: Properly toggle scan-another-btn visibility
+  const scanAnotherBtn = document.getElementById('scan-another-btn');
+  if (scanAnotherBtn) {
+    scanAnotherBtn.hidden = false;
   }
 }
 
@@ -352,14 +318,10 @@ export function showScannerHideButton() {
   if (scannerContainer) {
     scannerContainer.classList.remove('scanner-hidden');
   }
-}
 
-/**
- * Check if scanner is currently hidden
- * @returns {boolean}
- */
-export function isScannerHidden() {
-  const scannerContainer = document.querySelector('.scanner-container');
-  return scannerContainer?.classList.contains('scanner-hidden') ?? false;
+  // M7: Properly toggle scan-another-btn visibility
+  const scanAnotherBtn = document.getElementById('scan-another-btn');
+  if (scanAnotherBtn) {
+    scanAnotherBtn.hidden = true;
+  }
 }
-

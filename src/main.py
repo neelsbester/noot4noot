@@ -72,7 +72,7 @@ def cmd_import(args):
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
     except Exception as e:
-        print(f"Error importing playlist: {e}", file=sys.stderr)
+        print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
 
 
@@ -143,7 +143,11 @@ or pass them with --client-id and --client-secret.
     import_parser.add_argument(
         "--client-secret",
         type=str,
-        help="Spotify API client secret (or set SPOTIPY_CLIENT_SECRET env var)"
+        help=(
+            "Spotify API client secret (or set SPOTIPY_CLIENT_SECRET env var). "
+            "Prefer the environment variable over passing this flag directly to "
+            "avoid the secret appearing in shell history or process listings."
+        )
     )
     import_parser.set_defaults(func=cmd_import)
     

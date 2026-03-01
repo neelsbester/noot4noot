@@ -12,6 +12,7 @@ import { PlayerFactory } from './player-factory.js';
 import {
   showToast,
   showScreen,
+  escapeHtml,
   createDeviceItem,
   updateNowPlaying,
   updatePlayButton,
@@ -31,6 +32,14 @@ let scanner = null;
 let currentMode = null;
 let selectedDevice = null;
 let isYearRevealed = false;
+
+// M2: Playback in-progress guard
+let isPlaybackInProgress = false;
+
+// M3: AbortControllers for event listener management
+let loginController = null;
+let setupController = null;
+let playerController = null;
 
 /**
  * Save selected device to localStorage
@@ -93,8 +102,8 @@ async function init() {
     showToast('Authentication error: ' + err.message, 'error');
   }
 
-  // Check for existing stored token
-  const token = getStoredToken();
+  // M14: getStoredToken() is now async — await it
+  const token = await getStoredToken();
 
   if (token) {
     console.log('Found existing token');
@@ -110,14 +119,15 @@ async function init() {
  * Set up login screen event handlers
  */
 function setupLoginHandlers() {
-  const loginBtn = document.getElementById('login-btn');
+  // M3: Abort previous controller, create new one
+  loginController?.abort();
+  loginController = new AbortController();
 
+  const loginBtn = document.getElementById('login-btn');
   if (loginBtn) {
-    const newLoginBtn = loginBtn.cloneNode(true);
-    loginBtn.parentNode.replaceChild(newLoginBtn, loginBtn);
-    newLoginBtn.addEventListener('click', async () => {
+    loginBtn.addEventListener('click', async () => {
       await login();
-    });
+    }, { signal: loginController.signal });
   }
 }
 
@@ -173,31 +183,45 @@ async function showDeviceSelection(token) {
  * @param {string} token - Spotify access token
  */
 function setupDeviceHandlers(token) {
+  // M3: Abort previous controller, create new one
+  setupController?.abort();
+  setupController = new AbortController();
+
   const refreshBtn = document.getElementById('refresh-devices-btn');
   const startBtn = document.getElementById('start-scanning-btn');
   const devicesList = document.getElementById('devices-list');
 
   if (refreshBtn) {
-    const newRefreshBtn = refreshBtn.cloneNode(true);
-    refreshBtn.parentNode.replaceChild(newRefreshBtn, refreshBtn);
-    newRefreshBtn.addEventListener('click', () => refreshDevices(token));
+    // M4: Async handler with try/catch
+    refreshBtn.addEventListener('click', async () => {
+      try { await refreshDevices(token); } catch (e) { showToast(e.message, 'error'); }
+    }, { signal: setupController.signal });
   }
 
   if (startBtn) {
-    const newStartBtn = startBtn.cloneNode(true);
-    startBtn.parentNode.replaceChild(newStartBtn, startBtn);
-    newStartBtn.addEventListener('click', () => startPlayback(token));
+    startBtn.addEventListener('click', async () => {
+      try { await startPlayback(token); } catch (e) { showToast(e.message, 'error'); }
+    }, { signal: setupController.signal });
   }
 
   if (devicesList) {
-    const newDevicesList = devicesList.cloneNode(true);
-    devicesList.parentNode.replaceChild(newDevicesList, devicesList);
-    newDevicesList.addEventListener('click', (e) => {
+    devicesList.addEventListener('click', (e) => {
       const deviceItem = e.target.closest('.device-item');
       if (deviceItem) {
         selectDevice(deviceItem.dataset.deviceId, token);
       }
-    });
+    }, { signal: setupController.signal });
+  }
+
+  // M10: Logout button handler
+  const logoutBtn = document.getElementById('logout-btn');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', () => {
+      clearToken();
+      showScreen('login-screen');
+      setupLoginHandlers();
+      showToast('Logged out', 'info');
+    }, { signal: setupController.signal });
   }
 }
 
@@ -206,8 +230,11 @@ function setupDeviceHandlers(token) {
  * @param {string} token - Spotify access token
  */
 async function refreshDevices(token) {
+  // M13: Null guards for devicesList and startBtn
   const devicesList = document.getElementById('devices-list');
   const startBtn = document.getElementById('start-scanning-btn');
+
+  if (!devicesList) return;
 
   try {
     devicesList.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 2rem;">Loading devices...</p>';
@@ -263,7 +290,7 @@ async function refreshDevices(token) {
       if (activeDevice) {
         selectDevice(activeDevice.id, token, allDevices);
       }
-    } else {
+    } else if (startBtn) {
       startBtn.disabled = false;
     }
 
@@ -275,7 +302,7 @@ async function refreshDevices(token) {
         <p style="font-size: 0.85rem; margin-top: 0.5rem;">${error.message}</p>
       </div>
     `;
-    startBtn.disabled = true;
+    if (startBtn) startBtn.disabled = true;
   }
 }
 
@@ -285,8 +312,9 @@ async function refreshDevices(token) {
 function createDeviceItemWithSdk(device, isSelected = false) {
   if (device.is_sdk) {
     const selectedClass = isSelected ? 'selected' : '';
+    // M6: Escape device.id to prevent XSS
     return `
-      <div class="device-item ${selectedClass}" data-device-id="${device.id}">
+      <div class="device-item ${selectedClass}" data-device-id="${escapeHtml(device.id)}">
         <div class="device-icon" style="background: rgba(29, 185, 84, 0.15); color: var(--spotify-green);">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
@@ -337,7 +365,7 @@ async function selectDevice(deviceId, token, devices = null) {
     item.classList.toggle('selected', item.dataset.deviceId === deviceId);
   });
 
-  startBtn.disabled = false;
+  if (startBtn) startBtn.disabled = false;
   showToast(`Selected: ${device.name}`, 'info', 2000);
 }
 
@@ -372,12 +400,16 @@ async function initializeSDKPlayer(token) {
 
   player = PlayerFactory.create('sdk');
 
+  // M9: Loading state during SDK init
+  showToast('Connecting to Spotify...', 'info');
+
   try {
     await player.initialize({
       token,
       name: 'Hitster Web Player',
       volume: 50,
-      getToken: () => getStoredToken()
+      // M14: getStoredToken() is now async
+      getToken: async () => await getStoredToken()
     });
 
     player.onTrackEnd = () => {
@@ -458,7 +490,24 @@ async function startScanner() {
 
   } catch (error) {
     console.error('Failed to start scanner:', error);
-    showToast('Failed to start camera: ' + error.message, 'error');
+
+    // M8: Camera permission denied recovery
+    if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+      const scannerContainer = document.querySelector('.scanner-container');
+      if (scannerContainer) {
+        scannerContainer.innerHTML = `
+          <div class="camera-denied">
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2 2 20 20"/><path d="M10.41 10.41a2 2 0 1 1-2.83-2.83"/><line x1="13.5" x2="6" y1="13.5" y2="21"/><path d="M9.59 9.59 21 21"/><path d="m2 2 8 8"/><path d="M14 14.5V20a2 2 0 0 1-2 2"/><path d="M20 5a2 2 0 0 0-2-2h-3.38a2 2 0 0 1-1.41-.59l-.83-.82A2 2 0 0 0 11 1H8a2 2 0 0 0-2 2v3"/><path d="M3 10V5a2 2 0 0 1 2-2"/><circle cx="13" cy="11" r="3"/></svg>
+            <p style="margin: 1rem 0 0.5rem; font-weight: 600;">Camera Access Required</p>
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem;">Allow camera access in your browser settings to scan QR cards.</p>
+            <button class="btn-primary" id="retry-camera-btn">Try Again</button>
+          </div>
+        `;
+        document.getElementById('retry-camera-btn')?.addEventListener('click', () => startScanner(), { signal: playerController?.signal });
+      }
+    } else {
+      showToast('Failed to start camera: ' + error.message, 'error');
+    }
   }
 }
 
@@ -466,33 +515,29 @@ async function startScanner() {
  * Set up player screen handlers
  */
 function setupPlayerHandlers() {
+  // M3: Abort previous controller, create new one
+  playerController?.abort();
+  playerController = new AbortController();
+
   const pauseBtn = document.getElementById('pause-btn');
   const revealBtn = document.getElementById('reveal-btn');
   const changeDeviceBtn = document.getElementById('change-device-btn');
   const scanAnotherBtn = document.getElementById('scan-another-btn');
 
   if (pauseBtn) {
-    const newPauseBtn = pauseBtn.cloneNode(true);
-    pauseBtn.parentNode.replaceChild(newPauseBtn, pauseBtn);
-    newPauseBtn.addEventListener('click', togglePlayback);
+    pauseBtn.addEventListener('click', togglePlayback, { signal: playerController.signal });
   }
 
   if (revealBtn) {
-    const newRevealBtn = revealBtn.cloneNode(true);
-    revealBtn.parentNode.replaceChild(newRevealBtn, revealBtn);
-    newRevealBtn.addEventListener('click', handleReveal);
+    revealBtn.addEventListener('click', handleReveal, { signal: playerController.signal });
   }
 
   if (changeDeviceBtn) {
-    const newChangeDeviceBtn = changeDeviceBtn.cloneNode(true);
-    changeDeviceBtn.parentNode.replaceChild(newChangeDeviceBtn, changeDeviceBtn);
-    newChangeDeviceBtn.addEventListener('click', handleChangeDevice);
+    changeDeviceBtn.addEventListener('click', handleChangeDevice, { signal: playerController.signal });
   }
 
   if (scanAnotherBtn) {
-    const newScanAnotherBtn = scanAnotherBtn.cloneNode(true);
-    scanAnotherBtn.parentNode.replaceChild(newScanAnotherBtn, scanAnotherBtn);
-    newScanAnotherBtn.addEventListener('click', handleScanAnother);
+    scanAnotherBtn.addEventListener('click', handleScanAnother, { signal: playerController.signal });
   }
 }
 
@@ -522,7 +567,8 @@ async function handleChangeDevice() {
   selectedDevice = null;
   currentMode = null;
 
-  const token = getStoredToken();
+  // M14: getStoredToken() is now async
+  const token = await getStoredToken();
   if (token) {
     await showDeviceSelection(token);
   } else {
@@ -535,13 +581,18 @@ async function handleChangeDevice() {
  * Handle a successful QR scan
  */
 async function handleScan(spotifyUri) {
-  console.log('Playing:', spotifyUri);
+  // M5: Null guard for player
+  if (!player) { showToast('Player not ready yet', 'warning'); return; }
 
+  // M2: Playback in-progress guard
+  if (isPlaybackInProgress) return;
+
+  console.log('Playing:', spotifyUri);
   isYearRevealed = false;
 
+  isPlaybackInProgress = true;
   try {
     updateNowPlaying(null);
-    showToast('Loading track...', 'info', 1500);
 
     const track = await player.play(spotifyUri);
 
@@ -552,7 +603,12 @@ async function handleScan(spotifyUri) {
     // Hide scanner and show "Scan Another Code" button
     hideScannerShowButton();
 
-    showToast('Now playing!', 'success', 2000);
+    // M11: Combined success toast with track info; removed intermediate "Loading track..." toast
+    showToast(`Now playing: ${track.name}`, 'success', 2000);
+
+    // M12: Show reveal hint
+    const revealHint = document.getElementById('reveal-hint');
+    if (revealHint) revealHint.hidden = false;
 
   } catch (error) {
     console.error('Playback error:', error);
@@ -561,6 +617,8 @@ async function handleScan(spotifyUri) {
     if (error.message.includes('device') || error.message.includes('No active')) {
       showToast('Device unavailable - check Spotify is open', 'warning', 5000);
     }
+  } finally {
+    isPlaybackInProgress = false;
   }
 }
 
@@ -586,6 +644,10 @@ function handleReveal() {
   isYearRevealed = true;
   revealSongInfo();
   updateRevealButton(true, true);
+
+  // M12: Hide reveal hint after reveal
+  const revealHint = document.getElementById('reveal-hint');
+  if (revealHint) revealHint.hidden = true;
 }
 
 // Initialize when DOM is ready
@@ -595,13 +657,15 @@ if (document.readyState === 'loading') {
   init();
 }
 
-// Export for debugging
-window.hitsterDebug = {
-  getPlayer: () => player,
-  getScanner: () => scanner,
-  getSelectedDevice: () => selectedDevice,
-  getCurrentMode: () => currentMode,
-  clearSavedDevice,
-  clearToken,
-  login
-};
+// M1: Guard debug object to DEV only
+if (import.meta.env.DEV) {
+  window.hitsterDebug = {
+    getPlayer: () => player,
+    getScanner: () => scanner,
+    getSelectedDevice: () => selectedDevice,
+    getCurrentMode: () => currentMode,
+    clearSavedDevice,
+    clearToken,
+    login
+  };
+}

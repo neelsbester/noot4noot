@@ -19,11 +19,13 @@ ENV VITE_SPOTIFY_CLIENT_ID=$VITE_SPOTIFY_CLIENT_ID
 # Build the application
 RUN npm run build
 
-# Production stage - lightweight static file server
-FROM nginx:alpine
+# Production stage - non-root nginx for improved security
+FROM nginxinc/nginx-unprivileged:alpine
 
 # Install curl for healthcheck
+USER root
 RUN apk add --no-cache curl
+USER nginx
 
 # Copy custom nginx config for SPA routing
 COPY nginx.conf /etc/nginx/conf.d/default.conf
@@ -31,9 +33,9 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf
 # Copy built assets from builder
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-EXPOSE 80
+EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost/ || exit 1
+  CMD curl -f http://localhost:8080/ || exit 1
 
 CMD ["nginx", "-g", "daemon off;"]

@@ -303,6 +303,8 @@ body {
   border: 1px solid var(--accent-secondary);
   padding: 0.75rem 1.5rem;
   font-size: 0.9rem;
+  /* S5: Minimum touch target */
+  min-height: 44px;
 }
 
 .btn-reveal:hover {
@@ -313,7 +315,9 @@ body {
    Setup Screen
    ========================================================================== */
 
+/* S8: Setup screen relative positioning for logout button */
 #setup-screen {
+  position: relative;
   justify-content: center;
   align-items: center;
 }
@@ -855,9 +859,11 @@ body {
   }
 }
 
-.toast.success { border-color: var(--success); }
-.toast.error { border-color: var(--error); }
-.toast.warning { border-color: var(--warning); }
+/* S4: Toast type distinction with left border */
+.toast { border-left: 3px solid var(--text-muted); }
+.toast.success { border-color: var(--success); border-left-color: var(--success); }
+.toast.error { border-color: var(--error); border-left-color: var(--error); }
+.toast.warning { border-color: var(--warning); border-left-color: var(--warning); }
 
 /* ==========================================================================
    Responsive
@@ -978,5 +984,71 @@ body {
 .debug-entry .timestamp {
   color: var(--text-muted);
   margin-right: 0.5rem;
+}
+
+/* ==========================================================================
+   S1: Reduced Motion
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  .logo-icon { animation: none; }
+  .scanner.scanned .scanner-frame { animation: none; }
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+/* ==========================================================================
+   S2: Landscape Mode
+   ========================================================================== */
+
+@media (max-height: 500px) and (orientation: landscape) {
+  .player-content { flex-direction: row; gap: 1rem; }
+  .scanner-container { width: 50%; max-width: 300px; }
+  .now-playing-area { width: 50%; }
+}
+
+/* ==========================================================================
+   S3: Scanning indicator animation
+   ========================================================================== */
+
+.scanner-frame::after {
+  content: '';
+  position: absolute;
+  left: 10%;
+  right: 10%;
+  height: 2px;
+  background: var(--accent-primary);
+  opacity: 0.6;
+  animation: scanLine 2s ease-in-out infinite;
+}
+
+@keyframes scanLine {
+  0%, 100% { top: 20%; }
+  50% { top: 80%; }
+}
+
+/* ==========================================================================
+   S6: Camera denied state styling
+   ========================================================================== */
+
+.camera-denied {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+/* ==========================================================================
+   S7: Reveal hint styling
+   ========================================================================== */
+
+.reveal-hint {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  margin-top: 0.5rem;
+  animation: pulse 2s ease-in-out infinite;
 }
 

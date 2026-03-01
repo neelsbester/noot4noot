@@ -6,9 +6,12 @@
   <meta name="theme-color" content="#0a0a0f">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  
+
+  <!-- H1: Content Security Policy -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://sdk.scdn.co; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src https://fonts.gstatic.com; img-src 'self' https://i.scdn.co data: blob:; connect-src https://api.spotify.com https://accounts.spotify.com https://web3forms.com; media-src blob:;">
+
   <title>Hitster Player</title>
-  
+
   <link rel="manifest" href="/manifest.json">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -23,13 +26,14 @@
     <!-- Animated background -->
     <div class="bg-gradient"></div>
     <div class="bg-noise"></div>
-    
+
     <!-- Login Screen -->
     <div id="login-screen" class="screen">
       <div class="login-content">
         <div class="logo-container">
           <div class="logo-icon">
-            <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <!-- H2: aria-hidden on decorative SVG -->
+            <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
               <circle cx="50" cy="50" r="45" stroke="currentColor" stroke-width="3"/>
               <circle cx="50" cy="50" r="30" stroke="currentColor" stroke-width="2" opacity="0.6"/>
               <circle cx="50" cy="50" r="15" stroke="currentColor" stroke-width="2" opacity="0.3"/>
@@ -45,7 +49,8 @@
         </p>
 
         <button id="login-btn" class="btn btn-spotify">
-          <svg class="spotify-icon" viewBox="0 0 24 24" fill="currentColor">
+          <!-- H2: aria-hidden on decorative SVG inside button that has text -->
+          <svg class="spotify-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
           </svg>
           Connect with Spotify
@@ -59,22 +64,28 @@
 
     <!-- Setup Screen (Device Selection) -->
     <div id="setup-screen" class="screen" hidden>
+      <!-- H3: Logout button -->
+      <button id="logout-btn" class="btn-text" style="position: absolute; top: 1rem; right: 1rem; color: var(--text-muted); font-size: 0.8rem; display: inline-flex; align-items: center; gap: 0.4rem; background: none; border: none; cursor: pointer;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
+        Log out
+      </button>
       <div class="setup-content">
         <h2>Select Output Device</h2>
         <p class="setup-description">Where should the music play?</p>
-        
+
         <div id="devices-list" class="devices-list">
           <!-- Devices will be populated here -->
         </div>
-        
+
         <button id="refresh-devices-btn" class="btn btn-secondary">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <!-- H2: aria-hidden on decorative SVG inside button that has text -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <path d="M23 4v6h-6M1 20v-6h6"/>
             <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
           </svg>
           Refresh Devices
         </button>
-        
+
         <button id="start-scanning-btn" class="btn btn-primary" disabled>
           Start Scanning
         </button>
@@ -85,8 +96,10 @@
     <div id="player-screen" class="screen" hidden>
       <!-- Header -->
       <header class="player-header">
-        <button id="change-device-btn" class="btn-icon" title="Change device">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <!-- H2: aria-label on change-device-btn -->
+        <button id="change-device-btn" class="btn-icon" title="Change device" aria-label="Change playback device">
+          <!-- H2: aria-hidden on decorative SVG inside button -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
             <polyline points="17 2 12 7 7 2"/>
           </svg>
@@ -95,10 +108,13 @@
           <span class="device-label">Playing on</span>
           <span id="device-name" class="device-name">---</span>
         </div>
+        <!-- H5: Spacer for visual balance -->
+        <div style="width: 44px;" aria-hidden="true"></div>
       </header>
 
       <!-- Scanner Area -->
-      <div class="scanner-container">
+      <!-- H2: role and aria-label on scanner container -->
+      <div class="scanner-container" role="region" aria-label="QR Code Scanner">
         <div id="scanner" class="scanner">
           <div class="scanner-overlay">
             <div class="scanner-frame">
@@ -113,7 +129,8 @@
 
         <!-- Scan Another Code Button (shown when track is playing) -->
         <button id="scan-another-btn" class="scan-another-btn" hidden>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <!-- H2: aria-hidden on decorative SVG inside button that has text -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
             <circle cx="12" cy="13" r="4"/>
           </svg>
@@ -125,16 +142,20 @@
       <div id="now-playing" class="now-playing">
         <div class="now-playing-placeholder">
           <div class="placeholder-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <!-- H2: aria-hidden on decorative SVG -->
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
               <path d="M9 18V5l12-2v13"/>
               <circle cx="6" cy="18" r="3"/>
               <circle cx="18" cy="16" r="3"/>
             </svg>
           </div>
-          <p>Scan a card to play</p>
+          <!-- H6: More instructive placeholder text -->
+          <p>Hold a QR card up to the camera</p>
+          <p style="font-size: 0.8rem; opacity: 0.6;">The song will play automatically</p>
         </div>
-        
-        <div class="now-playing-content" hidden>
+
+        <!-- H2: aria-live on now-playing-content for screen reader announcements -->
+        <div class="now-playing-content" hidden aria-live="polite">
           <div class="album-art-container">
             <img id="album-art" class="album-art" src="" alt="Album art">
             <div class="vinyl-overlay"></div>
@@ -149,25 +170,33 @@
 
       <!-- Controls -->
       <div class="controls">
-        <button id="pause-btn" class="btn-control" disabled>
-          <svg id="pause-icon" viewBox="0 0 24 24" fill="currentColor">
+        <!-- H2: aria-label on pause-btn (will be toggled dynamically to "Pause"/"Play") -->
+        <button id="pause-btn" class="btn-control" disabled aria-label="Pause">
+          <svg id="pause-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <rect x="6" y="4" width="4" height="16"/>
             <rect x="14" y="4" width="4" height="16"/>
           </svg>
-          <svg id="play-icon" viewBox="0 0 24 24" fill="currentColor" hidden>
+          <svg id="play-icon" viewBox="0 0 24 24" fill="currentColor" hidden aria-hidden="true">
             <polygon points="5 3 19 12 5 21 5 3"/>
           </svg>
         </button>
-        
+
         <button id="reveal-btn" class="btn btn-reveal" hidden>
           Reveal Song Info
         </button>
+
+        <!-- H4: Reveal hint element -->
+        <p id="reveal-hint" class="reveal-hint" hidden>Guess the year, then tap reveal!</p>
       </div>
 
       <!-- Debug Panel (hidden by default, set DEBUG_MODE=true in scanner.js to enable) -->
       <div id="debug-panel" class="debug-panel" hidden>
         <div class="debug-header">
-          <span>🔍 Scanner Debug</span>
+          <!-- H7: Replace emoji with SVG icon -->
+          <span>
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align: middle; margin-right: 4px;"><circle cx="11" cy="11" r="8"/><line x1="21" x2="16.65" y1="21" y2="16.65"/></svg>
+            Scanner Debug
+          </span>
           <button id="clear-debug" class="debug-clear">Clear</button>
         </div>
         <div id="debug-log" class="debug-log">
@@ -183,4 +212,3 @@
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>
-

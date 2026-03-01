@@ -1,0 +1,21 @@
+{
+    "name": "Noot4Noot",
+    "short_name": "Noot4Noot",
+    "description": "A music guessing game - scan QR cards to play songs",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#0a0a1a",
+    "theme_color": "#6c5ce7",
+    "icons": [
+        {
+            "src": "/icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "/icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        }
+    ]
+}

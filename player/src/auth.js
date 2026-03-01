@@ -1,17 +1,17 @@
 /**
  * Spotify OAuth Authentication Module
- * 
+ *
  * Handles the OAuth 2.0 Authorization Code with PKCE flow for Spotify Web API.
- * 
+ *
  * SETUP:
  * 1. Go to https://developer.spotify.com/dashboard
  * 2. Create a new app (or use your existing Hitster app)
  * 3. Add your redirect URI (e.g., http://127.0.0.1:5173/callback)
- * 4. Copy your Client ID and paste it below
+ * 4. Copy your Client ID and paste it below OR set VITE_SPOTIFY_CLIENT_ID env var
  */
 
-// ⚠️ IMPORTANT: Replace with your Spotify App's Client ID
-const CLIENT_ID = 'd924c985a04941a1bfc8ffd87fa2e335';
+// Client ID - env var takes priority, fallback for dev convenience
+const CLIENT_ID = import.meta.env.VITE_SPOTIFY_CLIENT_ID || 'd924c985a04941a1bfc8ffd87fa2e335';
 
 // Redirect URI - must match exactly what's in your Spotify Dashboard
 const REDIRECT_URI = window.location.origin + '/callback';
@@ -29,6 +29,7 @@ const SCOPES = [
 // Token storage keys
 const TOKEN_KEY = 'hitster_spotify_token';
 const TOKEN_EXPIRY_KEY = 'hitster_spotify_token_expiry';
+const REFRESH_TOKEN_KEY = 'hitster_spotify_refresh_token';
 const CODE_VERIFIER_KEY = 'hitster_code_verifier';
 
 /**
@@ -74,17 +75,21 @@ async function generateCodeChallenge(verifier) {
  * Redirect user to Spotify authorization page
  */
 export async function login() {
+  if (!window.crypto?.subtle) {
+    throw new Error('Secure context required (HTTPS or localhost). Cannot perform authentication over HTTP.');
+  }
+
   // Generate PKCE code verifier and challenge
   const codeVerifier = generateRandomString(64);
   const codeChallenge = await generateCodeChallenge(codeVerifier);
-  
+
   // Store code verifier for later use
   sessionStorage.setItem(CODE_VERIFIER_KEY, codeVerifier);
-  
+
   // Generate state for CSRF protection
   const state = generateRandomString(16);
   sessionStorage.setItem('spotify_auth_state', state);
-  
+
   const authUrl = new URL('https://accounts.spotify.com/authorize');
   authUrl.searchParams.set('client_id', CLIENT_ID);
   authUrl.searchParams.set('response_type', 'code');
@@ -93,7 +98,7 @@ export async function login() {
   authUrl.searchParams.set('state', state);
   authUrl.searchParams.set('code_challenge_method', 'S256');
   authUrl.searchParams.set('code_challenge', codeChallenge);
-  
+
   window.location.href = authUrl.toString();
 }
 
@@ -106,43 +111,43 @@ export async function handleCallback() {
   const code = urlParams.get('code');
   const state = urlParams.get('state');
   const error = urlParams.get('error');
-  
-  console.log('handleCallback - code:', code ? 'present' : 'none');
-  console.log('handleCallback - state from URL:', state);
-  console.log('handleCallback - error:', error);
-  
+
+  console.debug('handleCallback - code:', code ? 'present' : 'none');
+  console.debug('handleCallback - state from URL:', state);
+  console.debug('handleCallback - error:', error);
+
   // Not a callback
   if (!code && !error) {
-    console.log('handleCallback - not a callback URL');
+    console.debug('handleCallback - not a callback URL');
     return null;
   }
-  
+
   // Check for errors
   if (error) {
     console.error('Spotify auth error:', error);
     return { error };
   }
-  
+
   // Validate state parameter (CSRF protection)
   const storedState = sessionStorage.getItem('spotify_auth_state');
-  console.log('handleCallback - stored state:', storedState);
+  console.debug('handleCallback - stored state:', storedState);
   if (state !== storedState) {
     console.error('State mismatch - URL state:', state, 'stored state:', storedState);
     return { error: 'state_mismatch' };
   }
-  
+
   // Get stored code verifier
   const codeVerifier = sessionStorage.getItem(CODE_VERIFIER_KEY);
-  console.log('handleCallback - code verifier:', codeVerifier ? 'present' : 'MISSING');
+  console.debug('handleCallback - code verifier:', codeVerifier ? 'present' : 'MISSING');
   if (!codeVerifier) {
     console.error('No code verifier found in sessionStorage');
     return { error: 'no_code_verifier' };
   }
-  
+
   // Clear session storage
   sessionStorage.removeItem('spotify_auth_state');
   sessionStorage.removeItem(CODE_VERIFIER_KEY);
-  
+
   try {
     // Exchange code for token
     const response = await fetch('https://accounts.spotify.com/api/token', {
@@ -158,30 +163,31 @@ export async function handleCallback() {
         code_verifier: codeVerifier
       })
     });
-    
+
     if (!response.ok) {
       const errorData = await response.json();
       console.error('Token exchange failed:', errorData);
       return { error: errorData.error || 'token_exchange_failed' };
     }
-    
+
     const data = await response.json();
-    
+
     // Calculate expiry time
     const expiryTime = Date.now() + (data.expires_in * 1000);
-    
-    // Store token
+
+    // Store token and refresh token
     localStorage.setItem(TOKEN_KEY, data.access_token);
     localStorage.setItem(TOKEN_EXPIRY_KEY, expiryTime.toString());
-    
+    localStorage.setItem(REFRESH_TOKEN_KEY, data.refresh_token);
+
     // Clear URL parameters
     window.history.replaceState({}, document.title, window.location.pathname);
-    
-    return { 
-      accessToken: data.access_token, 
-      expiresIn: data.expires_in 
+
+    return {
+      accessToken: data.access_token,
+      expiresIn: data.expires_in
     };
-    
+
   } catch (err) {
     console.error('Token exchange error:', err);
     return { error: 'network_error' };
@@ -189,27 +195,55 @@ export async function handleCallback() {
 }
 
 /**
- * Get stored access token if valid
- * @returns {string|null} Access token or null if expired/not found
+ * Use the refresh token to obtain a new access token.
+ * Clears auth state and returns null if refresh fails.
+ * @returns {Promise<string|null>} New access token or null on failure
  */
-export function getStoredToken() {
-  const token = localStorage.getItem(TOKEN_KEY);
-  const expiry = localStorage.getItem(TOKEN_EXPIRY_KEY);
-  
-  if (!token || !expiry) {
-    return null;
-  }
-  
-  // Check if token is expired (with 5 minute buffer)
-  const expiryTime = parseInt(expiry, 10);
-  const bufferMs = 5 * 60 * 1000; // 5 minutes
-  
-  if (Date.now() > expiryTime - bufferMs) {
-    // Token expired or about to expire
+export async function refreshAccessToken() {
+  const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
+  if (!refreshToken) return null;
+
+  const response = await fetch('https://accounts.spotify.com/api/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+      client_id: CLIENT_ID,
+    }),
+  });
+
+  if (!response.ok) {
     clearToken();
     return null;
   }
-  
+
+  const data = await response.json();
+  localStorage.setItem(TOKEN_KEY, data.access_token);
+  localStorage.setItem(TOKEN_EXPIRY_KEY, Date.now() + data.expires_in * 1000);
+  if (data.refresh_token) {
+    localStorage.setItem(REFRESH_TOKEN_KEY, data.refresh_token);
+  }
+  return data.access_token;
+}
+
+/**
+ * Get stored access token, auto-refreshing if near expiry.
+ * @returns {Promise<string|null>} Access token or null if unavailable
+ */
+export async function getStoredToken() {
+  const token = localStorage.getItem(TOKEN_KEY);
+  const expiry = localStorage.getItem(TOKEN_EXPIRY_KEY);
+
+  if (!token) return null;
+
+  // If token expired or near expiry (5 min buffer), try refresh
+  if (expiry && Date.now() > Number(expiry) - 300000) {
+    const refreshed = await refreshAccessToken();
+    if (refreshed) return refreshed;
+    return null;
+  }
+
   return token;
 }
 
@@ -219,14 +253,15 @@ export function getStoredToken() {
 export function clearToken() {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(TOKEN_EXPIRY_KEY);
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
 }
 
 /**
  * Check if user is authenticated
- * @returns {boolean}
+ * @returns {Promise<boolean>}
  */
-export function isAuthenticated() {
-  return getStoredToken() !== null;
+export async function isAuthenticated() {
+  return (await getStoredToken()) !== null;
 }
 
 /**
@@ -239,22 +274,4 @@ export function getTokenTimeRemaining() {
 
   const remaining = parseInt(expiry, 10) - Date.now();
   return Math.max(0, remaining);
-}
-
-/**
- * Check if a playback mode requires authentication
- * @param {string} mode - 'preview', 'sdk', or 'external'
- * @returns {boolean}
- */
-export function isAuthRequired(mode) {
-  return mode !== 'preview';
-}
-
-/**
- * Check if a playback mode requires Spotify Premium
- * @param {string} mode - 'preview', 'sdk', or 'external'
- * @returns {boolean}
- */
-export function isPremiumRequired(mode) {
-  return mode !== 'preview';
 }

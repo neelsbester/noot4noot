@@ -1,6 +1,6 @@
 /**
  * QR Code Scanner Module
- * 
+ *
  * Uses html5-qrcode library for camera-based QR code scanning.
  * Uses jsQR for inverted QR codes (white on dark background) with native support.
  */
@@ -17,23 +17,27 @@ const DEBUG_MODE = false;
  */
 function debugLog(message, type = 'info') {
   if (!DEBUG_MODE) return;
-  
+
   const debugLogEl = document.getElementById('debug-log');
   if (!debugLogEl) return;
-  
+
   const timestamp = new Date().toLocaleTimeString();
   const entry = document.createElement('p');
   entry.className = `debug-entry ${type}`;
-  entry.innerHTML = `<span class="timestamp">${timestamp}</span>${message}`;
-  
+  const timestampSpan = document.createElement('span');
+  timestampSpan.className = 'timestamp';
+  timestampSpan.textContent = timestamp;
+  entry.appendChild(timestampSpan);
+  entry.appendChild(document.createTextNode(' ' + message));
+
   // Add at the top
   debugLogEl.insertBefore(entry, debugLogEl.firstChild);
-  
+
   // Keep only last 20 entries
   while (debugLogEl.children.length > 20) {
     debugLogEl.removeChild(debugLogEl.lastChild);
   }
-  
+
   console.log(`[Scanner ${type}]`, message);
 }
 
@@ -45,7 +49,7 @@ if (DEBUG_MODE) {
     if (debugPanel) {
       debugPanel.removeAttribute('hidden');
     }
-    
+
     // Set up clear button
     const clearBtn = document.getElementById('clear-debug');
     if (clearBtn) {
@@ -73,7 +77,7 @@ export class QRScanner {
     this.onScan = options.onScan || (() => {});
     this.onError = options.onError || console.error;
     this.cooldownMs = options.cooldownMs || 3000;
-    
+
     this.scanner = null;
     this.videoElement = null;
     this.canvas = null;
@@ -83,8 +87,9 @@ export class QRScanner {
     this.isScanning = false;
     this.lastScannedCode = null;
     this.lastScanTime = 0;
-    
-    debugLog('Scanner initialized (jsQR + inverted mode)', 'info');
+    this._consecutiveErrors = 0;
+
+    debugLog('[INFO] Scanner initialized (jsQR + inverted mode)', 'info');
   }
 
   /**
@@ -93,16 +98,16 @@ export class QRScanner {
    */
   async start() {
     if (this.isScanning) {
-      debugLog('Scanner already running', 'info');
+      debugLog('[INFO] Scanner already running', 'info');
       return;
     }
 
-    debugLog('Starting scanner...', 'info');
+    debugLog('[INFO] Starting scanner...', 'info');
 
     try {
       this.scanner = new Html5Qrcode(this.elementId);
-      debugLog('Html5Qrcode instance created', 'info');
-      
+      debugLog('[INFO] Html5Qrcode instance created', 'info');
+
       // Scanner configuration
       const config = {
         fps: 10,
@@ -112,36 +117,35 @@ export class QRScanner {
         }
       };
 
-      debugLog('Starting camera...', 'info');
-      
+      debugLog('[INFO] Starting camera...', 'info');
+
       let frameCount = 0;
-      let invertedScanCount = 0;
 
       await this.scanner.start(
         { facingMode: 'environment' },
         config,
         (decodedText) => {
-          debugLog(`🎯 NORMAL scan: "${decodedText}"`, 'success');
+          debugLog(`[SCAN] NORMAL scan: "${decodedText}"`, 'success');
           this.handleScan(decodedText);
         },
         (errorMessage) => {
           frameCount++;
           if (frameCount === 1) {
-            debugLog('📷 Camera active, starting inverted scanning...', 'success');
+            debugLog('[OK] Camera active, starting inverted scanning...', 'success');
             // Start inverted frame scanning after camera is active
             this.startInvertedScanning();
           }
           if (frameCount % 200 === 0) {
-            debugLog(`Frames: ${frameCount}, Inverted scans: ${invertedScanCount}`, 'info');
+            debugLog(`[INFO] Frames: ${frameCount}`, 'info');
           }
         }
       );
 
       this.isScanning = true;
-      debugLog('✅ Scanner started! Scanning both normal and inverted.', 'success');
-      
+      debugLog('[OK] Scanner started! Scanning both normal and inverted.', 'success');
+
     } catch (error) {
-      debugLog(`❌ Camera error: ${error.message}`, 'error');
+      debugLog(`[ERR] Camera error: ${error.message}`, 'error');
       this.handleError(error);
       throw error;
     }
@@ -154,7 +158,7 @@ export class QRScanner {
     // Get the video element created by html5-qrcode
     this.videoElement = document.querySelector(`#${this.elementId} video`);
     if (!this.videoElement) {
-      debugLog('Could not find video element for inverted scanning', 'error');
+      debugLog('[ERR] Could not find video element for inverted scanning', 'error');
       return;
     }
 
@@ -162,7 +166,7 @@ export class QRScanner {
     this.canvas = document.createElement('canvas');
     this.canvasCtx = this.canvas.getContext('2d', { willReadFrequently: true });
 
-    debugLog('jsQR inverted scanning enabled (attemptBoth mode)', 'success');
+    debugLog('[OK] jsQR inverted scanning enabled (attemptBoth mode)', 'success');
 
     // Scan frames periodically with jsQR (primary scanner)
     this.scanInterval = setInterval(() => {
@@ -185,7 +189,7 @@ export class QRScanner {
     try {
       const width = this.videoElement.videoWidth;
       const height = this.videoElement.videoHeight;
-      
+
       if (width === 0 || height === 0) return;
 
       // Set canvas size
@@ -204,11 +208,15 @@ export class QRScanner {
       });
 
       if (code && code.data) {
-        debugLog(`🎯 jsQR scan: "${code.data}"`, 'success');
+        this._consecutiveErrors = 0;
+        debugLog(`[SCAN] jsQR scan: "${code.data}"`, 'success');
         this.handleScan(code.data);
       }
     } catch (error) {
-      // Error scanning frame - don't log to avoid spam
+      this._consecutiveErrors++;
+      if (this._consecutiveErrors >= 10 && this._consecutiveErrors % 10 === 0) {
+        console.warn(`[SCAN] ${this._consecutiveErrors} consecutive scan errors`);
+      }
     }
   }
 
@@ -223,7 +231,7 @@ export class QRScanner {
     try {
       const width = this.videoElement.videoWidth;
       const height = this.videoElement.videoHeight;
-      
+
       if (width === 0 || height === 0) return;
 
       this.canvas.width = width;
@@ -232,7 +240,7 @@ export class QRScanner {
 
       const imageData = this.canvasCtx.getImageData(0, 0, width, height);
       const data = imageData.data;
-      
+
       // Invert colors
       for (let i = 0; i < data.length; i += 4) {
         data[i] = 255 - data[i];       // Red
@@ -246,11 +254,15 @@ export class QRScanner {
       });
 
       if (code && code.data) {
-        debugLog(`🎯 Manual invert scan: "${code.data}"`, 'success');
+        this._consecutiveErrors = 0;
+        debugLog(`[SCAN] Manual invert scan: "${code.data}"`, 'success');
         this.handleScan(code.data);
       }
     } catch (error) {
-      // No QR found
+      this._consecutiveErrors++;
+      if (this._consecutiveErrors >= 10 && this._consecutiveErrors % 10 === 0) {
+        console.warn(`[SCAN] ${this._consecutiveErrors} consecutive scan errors`);
+      }
     }
   }
 
@@ -271,6 +283,10 @@ export class QRScanner {
       this.invertedScanInterval = null;
     }
 
+    // Release canvas memory
+    this.canvas = null;
+    this.canvasCtx = null;
+
     if (!this.isScanning || !this.scanner) {
       return;
     }
@@ -278,10 +294,20 @@ export class QRScanner {
     try {
       await this.scanner.stop();
       this.isScanning = false;
-      debugLog('Scanner stopped', 'info');
+      debugLog('[INFO] Scanner stopped', 'info');
     } catch (error) {
-      debugLog(`Error stopping: ${error.message}`, 'error');
+      debugLog(`[ERR] Error stopping: ${error.message}`, 'error');
     }
+  }
+
+  /**
+   * Destroy the scanner and release all resources
+   */
+  destroy() {
+    this.stop();
+    this.canvas = null;
+    this.canvasCtx = null;
+    this.html5QrCode = null;
   }
 
   /**
@@ -290,7 +316,7 @@ export class QRScanner {
    */
   handleScan(decodedText) {
     const now = Date.now();
-    
+
     // Check cooldown
     if (now - this.lastScanTime < this.cooldownMs) {
       return; // Silent during cooldown
@@ -303,9 +329,9 @@ export class QRScanner {
 
     // Validate Spotify track URI
     const trackUri = this.extractSpotifyTrackUri(decodedText);
-    
+
     if (!trackUri) {
-      debugLog(`❌ Not Spotify: "${decodedText.substring(0, 40)}..."`, 'error');
+      debugLog(`[ERR] Not Spotify: "${decodedText.substring(0, 40)}..."`, 'error');
       return;
     }
 
@@ -317,7 +343,7 @@ export class QRScanner {
     this.triggerScanAnimation();
 
     // Call the callback with the track URI
-    debugLog(`🎵 Playing: ${trackUri}`, 'success');
+    debugLog(`[OK] Playing: ${trackUri}`, 'success');
     this.onScan(trackUri);
   }
 
@@ -326,7 +352,7 @@ export class QRScanner {
    */
   extractSpotifyTrackUri(content) {
     if (!content) return null;
-    
+
     const trimmed = content.trim();
 
     // Already a Spotify URI
@@ -371,7 +397,7 @@ export class QRScanner {
    */
   handleError(error) {
     let message = 'Scanner error';
-    
+
     if (error.name === 'NotAllowedError') {
       message = 'Camera permission denied. Please allow camera access and reload.';
     } else if (error.name === 'NotFoundError') {

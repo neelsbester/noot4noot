@@ -7,8 +7,6 @@
 
 import { PlaybackEngine } from './playback-engine.js';
 
-const SPOTIFY_API_BASE = 'https://api.spotify.com/v1';
-
 export class SDKPlayer extends PlaybackEngine {
   constructor() {
     super();
@@ -36,10 +34,29 @@ export class SDKPlayer extends PlaybackEngine {
   }
 
   /**
+   * Get the current access token, refreshing if a callback is provided.
+   * @protected
+   * @returns {Promise<string|null>}
+   */
+  async _getToken() {
+    if (this._getTokenCallback) {
+      try {
+        const freshToken = await this._getTokenCallback();
+        if (freshToken) {
+          this._token = freshToken;
+        }
+      } catch (error) {
+        console.warn('Failed to refresh token:', error);
+      }
+    }
+    return this._token ?? null;
+  }
+
+  /**
    * Initialize the Spotify Web Playback SDK
    * @param {Object} options
    * @param {string} options.token - Spotify access token
-   * @param {Function} [options.getToken] - Callback to get fresh token on expiry
+   * @param {Function} [options.getToken] - Async callback to get a fresh token on expiry
    * @param {string} [options.name='Hitster Web Player'] - Device name
    * @param {number} [options.volume=50] - Initial volume (0-100)
    */
@@ -57,22 +74,12 @@ export class SDKPlayer extends PlaybackEngine {
     // Wait for SDK to load
     await this._waitForSDK();
 
-    return new Promise((resolve, reject) => {
+    const connectionPromise = new Promise((resolve, reject) => {
       this._player = new window.Spotify.Player({
         name,
         getOAuthToken: async (cb) => {
-          // Try to get fresh token if callback provided
-          if (this._getTokenCallback) {
-            try {
-              const freshToken = await this._getTokenCallback();
-              if (freshToken) {
-                this._token = freshToken;
-              }
-            } catch (error) {
-              console.warn('Failed to refresh token:', error);
-            }
-          }
-          cb(this._token);
+          const t = await this._getToken();
+          cb(t);
         },
         volume: this._volume / 100
       });
@@ -131,7 +138,7 @@ export class SDKPlayer extends PlaybackEngine {
             album: track.album.name,
             albumArt: track.album.images[0]?.url || null,
             albumArtSmall: track.album.images[2]?.url || track.album.images[0]?.url || null,
-            year: null, // SDK doesn't provide release date
+            year: null, // SDK doesn't provide release date; enriched by play()
             durationMs: track.duration_ms,
             previewUrl: null
           };
@@ -153,8 +160,14 @@ export class SDKPlayer extends PlaybackEngine {
         if (!success) {
           reject(new Error('Failed to connect to Spotify'));
         }
-      });
+      }).catch(reject);
     });
+
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('SDK connection timed out after 15 seconds')), 15000)
+    );
+
+    await Promise.race([connectionPromise, timeoutPromise]);
   }
 
   /**
@@ -172,6 +185,7 @@ export class SDKPlayer extends PlaybackEngine {
 
       // Set up the callback that Spotify SDK calls when ready
       window.onSpotifyWebPlaybackSDKReady = () => {
+        clearInterval(checkInterval);
         resolve();
       };
 
@@ -199,106 +213,61 @@ export class SDKPlayer extends PlaybackEngine {
     }
 
     // Use Spotify Web API to start playback on our SDK device
-    const response = await fetch(`${SPOTIFY_API_BASE}/me/player/play?device_id=${this._deviceId}`, {
+    await this._apiRequest(`/me/player/play?device_id=${this._deviceId}`, {
       method: 'PUT',
-      headers: {
-        'Authorization': `Bearer ${this._token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        uris: [trackUri]
-      })
+      body: JSON.stringify({ uris: [trackUri] }),
     });
-
-    if (!response.ok && response.status !== 204) {
-      if (response.status === 401) {
-        throw new Error('Token expired. Please log in again.');
-      }
-      if (response.status === 403) {
-        throw new Error('Spotify Premium required for playback.');
-      }
-      if (response.status === 404) {
-        throw new Error('Player not found. Please refresh the page.');
-      }
-      const errorText = await response.text();
-      throw new Error(`Playback failed: ${errorText}`);
-    }
 
     this._isPlaying = true;
 
-    // Fetch full track info (SDK doesn't provide year)
-    const info = await this._fetchTrackInfo(trackUri.split(':')[2]);
+    // Fetch full track info (SDK state doesn't include release year)
+    const info = await this._fetchTrackInfo(trackUri);
     this._currentTrack = info;
 
     return info;
   }
 
   /**
-   * Fetch track info from Spotify API
-   * @private
+   * Override base _fetchTrackInfo to fall back to cached track data on error.
+   * @protected
+   * @param {string} trackUri - Spotify track URI
+   * @returns {Promise<TrackInfo>}
    */
-  async _fetchTrackInfo(trackId) {
+  async _fetchTrackInfo(trackUri) {
     try {
-      const response = await fetch(`${SPOTIFY_API_BASE}/tracks/${trackId}`, {
-        headers: {
-          'Authorization': `Bearer ${this._token}`
-        }
-      });
-
-      if (response.ok) {
-        const track = await response.json();
-        return {
-          id: track.id,
-          uri: track.uri,
-          name: track.name,
-          artists: track.artists.map(a => a.name),
-          artistString: track.artists.map(a => a.name).join(', '),
-          album: track.album.name,
-          albumArt: track.album.images[0]?.url || null,
-          albumArtSmall: track.album.images[2]?.url || track.album.images[0]?.url || null,
-          year: this._extractYear(track.album.release_date),
-          durationMs: track.duration_ms,
-          previewUrl: track.preview_url
-        };
-      }
+      return await super._fetchTrackInfo(trackUri);
     } catch (error) {
       console.warn('Failed to fetch track info:', error);
+      const trackId = trackUri.replace('spotify:track:', '');
+      return this._currentTrack || {
+        id: trackId,
+        uri: trackUri,
+        name: 'Unknown Track',
+        artists: ['Unknown Artist'],
+        artistString: 'Unknown Artist',
+        album: 'Unknown Album',
+        albumArt: null,
+        albumArtSmall: null,
+        year: null,
+        durationMs: 0,
+        previewUrl: null,
+      };
     }
-
-    return this._currentTrack || {
-      id: trackId,
-      uri: `spotify:track:${trackId}`,
-      name: 'Unknown Track',
-      artists: ['Unknown Artist'],
-      artistString: 'Unknown Artist',
-      album: 'Unknown Album',
-      albumArt: null,
-      albumArtSmall: null,
-      year: null,
-      durationMs: 0,
-      previewUrl: null
-    };
-  }
-
-  /**
-   * Extract year from release date
-   * @private
-   */
-  _extractYear(releaseDate) {
-    if (!releaseDate) return null;
-    const year = parseInt(releaseDate.substring(0, 4), 10);
-    return isNaN(year) ? null : year;
   }
 
   async pause() {
     if (this._player) {
       await this._player.pause();
+      this._isPlaying = false;
+      this._emitStateChange();
     }
   }
 
   async resume() {
     if (this._player) {
       await this._player.resume();
+      this._isPlaying = true;
+      this._emitStateChange();
     }
   }
 

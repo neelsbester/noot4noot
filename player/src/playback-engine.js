@@ -21,6 +21,8 @@
  * @property {string|null} previewUrl - 30-second preview URL
  */
 
+export const SPOTIFY_API_BASE = 'https://api.spotify.com/v1';
+
 /**
  * Base class for playback engines
  * @abstract
@@ -156,6 +158,87 @@ export class PlaybackEngine {
   destroy() {
     this._isPlaying = false;
     this._currentTrack = null;
+  }
+
+  /**
+   * Make an authenticated API request. Returns parsed JSON body or null for 204.
+   * Subclasses must set this._token or override _getToken().
+   * @protected
+   * @param {string} endpoint - API endpoint path (e.g. '/me/player') or full URL
+   * @param {Object} [options] - Fetch options
+   * @returns {Promise<Object|null>}
+   */
+  async _apiRequest(endpoint, options = {}) {
+    const token = await this._getToken();
+    if (!token) throw new Error('No valid token available');
+
+    const url = endpoint.startsWith('http') ? endpoint : `${SPOTIFY_API_BASE}${endpoint}`;
+
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    });
+
+    if (response.status === 401) {
+      throw new Error('Token expired');
+    }
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error?.error?.message || `API error: ${response.status}`);
+    }
+
+    if (response.status === 204) return null;
+    return response.json();
+  }
+
+  /**
+   * Get the current access token. Override in subclasses for dynamic token refresh.
+   * @protected
+   * @returns {Promise<string|null>}
+   */
+  async _getToken() {
+    return this._token ?? null;
+  }
+
+  /**
+   * Fetch track info from Spotify API
+   * @protected
+   * @param {string} trackUri - Spotify track URI (spotify:track:xxx)
+   * @returns {Promise<TrackInfo>}
+   */
+  async _fetchTrackInfo(trackUri) {
+    const trackId = trackUri.replace('spotify:track:', '');
+    const data = await this._apiRequest(`/tracks/${trackId}`);
+    return {
+      id: data.id,
+      uri: data.uri,
+      name: data.name,
+      artists: data.artists.map(a => a.name),
+      artistString: data.artists.map(a => a.name).join(', '),
+      album: data.album.name,
+      albumArt: data.album.images?.[0]?.url || null,
+      albumArtSmall: data.album.images?.[2]?.url || data.album.images?.[0]?.url || null,
+      year: this._extractYear(data.album.release_date),
+      durationMs: data.duration_ms,
+      previewUrl: data.preview_url ?? null,
+    };
+  }
+
+  /**
+   * Extract year from a Spotify release_date string (YYYY, YYYY-MM, or YYYY-MM-DD)
+   * @protected
+   * @param {string|null|undefined} releaseDate
+   * @returns {number|null}
+   */
+  _extractYear(releaseDate) {
+    if (!releaseDate) return null;
+    const year = parseInt(releaseDate.substring(0, 4), 10);
+    return isNaN(year) ? null : year;
   }
 
   /**
