@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0c0b09">
+  <title>Noot4Noot — Team</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/game.css">
+</head>
+<body class="team-body">
+  <main class="team-shell">
+    <header class="team-header">
+      <div class="brand"><span class="brand-disc" aria-hidden="true"></span><span>NOOT4NOOT</span></div>
+      <div class="team-turn-status"><i></i><strong id="team-name">YOUR TEAM</strong><span id="team-status">Connecting…</span></div>
+      <div class="team-token-pill"><i></i><strong id="team-token-count">0</strong><span>TOKENS</span></div>
+    </header>
+
+    <section id="team-loading" class="full-state"><div class="loading-disc"></div><p>Joining the table…</p></section>
+    <section id="team-lobby" class="team-lobby" hidden><div class="loading-disc"></div><span>ROOM <strong id="team-room-code">----</strong></span><h1>You’re in.</h1><p>Waiting for the host to start the music.</p></section>
+
+    <section id="team-game" class="team-game" hidden>
+      <section class="team-stage">
+        <div class="team-stage-copy"><span id="team-stage-kicker">NOW PLAYING</span><h1 id="team-stage-title">Where does it belong?</h1><p id="team-stage-copy">Drag the mystery card into a gap, or tap a gap.</p></div>
+        <div id="team-mystery-card" class="mystery-card draggable" role="button" tabindex="0" aria-label="Mystery song card">
+          <div class="mystery-back"><span>NOOT</span><i></i><span>4NOOT</span></div>
+          <div id="team-reveal-face" class="mystery-front"><strong>????</strong><span>Mystery track</span><small>Waiting for reveal</small></div>
+        </div>
+        <div class="team-round-meta"><span>ROUND</span><strong id="team-round-number">01</strong><i></i><span id="team-phase">PLACEMENT</span></div>
+      </section>
+
+      <section class="team-board">
+        <div class="team-board-heading"><div><span id="timeline-kicker">YOUR TIMELINE</span><h2 id="timeline-owner">—</h2></div><p id="timeline-help">Choose a gap</p></div>
+        <div id="team-timeline" class="timeline team-timeline"></div>
+      </section>
+
+      <footer class="team-actions">
+        <p id="team-action-copy">Waiting for game state…</p>
+        <div class="team-action-buttons">
+          <button id="no-challenge-button" class="secondary-button compact" type="button" hidden>No challenge <span>→</span></button>
+          <button id="team-main-button" class="primary-button compact" type="button" disabled>Lock in position <span>✓</span></button>
+        </div>
+      </footer>
+    </section>
+
+    <div id="team-result" class="result-banner" hidden>
+      <div id="result-symbol" class="result-symbol">✓</div>
+      <div><span id="result-label">PERFECT PLACEMENT</span><strong id="result-song">1985 · TAKE ON ME</strong><small id="result-artist">a-ha</small></div>
+      <p id="result-owner">+1<small>CARD</small></p>
+    </div>
+    <div id="drag-ghost" class="drag-ghost" aria-hidden="true"></div>
+  </main>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="/team.js"></script>
+</body>
+</html>

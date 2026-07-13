@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0c0b09">
+  <title>Noot4Noot — Host</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/game.css">
+</head>
+<body>
+  <main class="host-shell">
+    <header class="app-header">
+      <a class="brand" href="/"><span class="brand-disc" aria-hidden="true"></span><span>NOOT4NOOT</span></a>
+      <div class="header-room">ROOM <strong id="header-room-code">----</strong></div>
+      <div class="live-pill"><i></i><span>HOST TABLE</span></div>
+    </header>
+
+    <section id="host-loading" class="full-state"><div class="loading-disc"></div><p>Opening your table…</p></section>
+
+    <section id="host-lobby" class="host-lobby" hidden>
+      <div class="lobby-code-card">
+        <p class="overline">YOUR ROOM CODE</p>
+        <h1 id="lobby-room-code">----</h1>
+        <p>Open this address on the phone and iPad:</p>
+        <button id="copy-join-url" class="join-url" type="button"><span id="join-url">Loading address…</span><b>COPY</b></button>
+      </div>
+      <div class="lobby-roster">
+        <div class="section-heading"><div><span>TEAMS</span><h2>Waiting in the booth</h2></div><strong id="lobby-team-count">0 / 2 minimum</strong></div>
+        <div id="lobby-team-list" class="lobby-team-list"></div>
+        <button id="start-game-button" class="primary-button" type="button" disabled>Start the music <span>→</span></button>
+      </div>
+    </section>
+
+    <section id="host-game" class="host-game" hidden>
+      <div class="host-main-column">
+        <div class="round-strip">
+          <div><span>ROUND</span><strong id="host-round-number">01</strong></div>
+          <div class="round-active"><span>NOW PLAYING FOR</span><strong id="host-active-team">—</strong></div>
+          <span id="host-phase" class="phase-pill">PLACEMENT</span>
+        </div>
+
+        <section class="host-stage">
+          <div id="host-mystery-card" class="mystery-card" aria-label="Mystery song card">
+            <div class="mystery-back"><span>NOOT</span><i></i><span>4NOOT</span></div>
+            <div id="host-reveal-face" class="mystery-front"><strong>????</strong><span>Mystery track</span><small>Waiting for reveal</small></div>
+          </div>
+          <div class="host-stage-copy"><span id="host-stage-kicker">CURRENT SONG</span><h1 id="host-stage-title">Waiting for a placement</h1><p id="host-stage-copy">The active team is deciding where the card belongs.</p></div>
+          <div class="spotify-console">
+            <span>SPOTIFY OUTPUT</span>
+            <button id="spotify-connect-button" class="spotify-button" type="button">Connect Spotify</button>
+            <div id="spotify-device-row" class="spotify-device-row" hidden>
+              <select id="spotify-device-select" aria-label="Spotify playback device"><option value="">Choose device</option></select>
+              <button id="spotify-refresh-button" type="button" aria-label="Refresh Spotify devices">↻</button>
+            </div>
+            <button id="play-song-button" class="play-song-button" type="button" disabled><span>▶</span> Play mystery song</button>
+            <a id="spotify-fallback-link" class="spotify-fallback" href="#" target="_blank" rel="noopener">Open track in Spotify instead</a>
+          </div>
+        </section>
+
+        <section class="board-panel">
+          <div class="section-heading"><div><span>ACTIVE TIMELINE</span><h2 id="board-team-name">—</h2></div><p id="board-status">Waiting for their choice</p></div>
+          <div id="host-timeline" class="timeline"></div>
+        </section>
+
+        <div class="host-round-actions">
+          <button id="close-challenge-button" class="secondary-button" type="button" hidden>No challenge · close window</button>
+          <button id="host-reveal-button" class="primary-button compact" type="button" hidden>Reveal card <span>↻</span></button>
+          <button id="next-round-button" class="primary-button compact" type="button" hidden>Next round <span>→</span></button>
+          <p id="host-action-copy">Waiting for the active team…</p>
+        </div>
+      </div>
+
+      <aside class="host-sidebar">
+        <div class="section-heading"><div><span>HOST CONTROL</span><h2>Teams & tokens</h2></div></div>
+        <div class="token-rules"><i></i><p><strong>+1</strong> correct title and artist<br><strong>−1</strong> challenge · <strong>−3</strong> random card</p></div>
+        <div id="host-team-list" class="host-team-list"></div>
+        <div class="challenge-status"><span>CHALLENGE</span><strong id="challenge-status-copy">Not open yet</strong></div>
+      </aside>
+    </section>
+  </main>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script>window.onSpotifyWebPlaybackSDKReady = window.onSpotifyWebPlaybackSDKReady || (() => {});</script>
+  <script src="https://sdk.scdn.co/spotify-player.js"></script>
+  <script type="module" src="/host.js"></script>
+</body>
+</html>

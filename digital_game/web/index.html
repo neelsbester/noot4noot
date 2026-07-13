@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0c0b09">
+  <title>Noot4Noot — Digital Game</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/game.css">
+</head>
+<body class="landing-body">
+  <main class="landing-shell">
+    <section class="landing-hero">
+      <div class="brand"><span class="brand-disc" aria-hidden="true"></span><span>NOOT4NOOT</span></div>
+      <p class="overline">DIGITAL PARTY MODE</p>
+      <h1>Hear it.<br><em>Place it.</em><br>Challenge it.</h1>
+      <p class="hero-copy">A shared music timeline for the room. The host runs the music; every team plays from its own screen.</p>
+      <div class="hero-rule">
+        <span>1</span><p>Host creates a room</p><i></i>
+        <span>2</span><p>Teams join by code</p><i></i>
+        <span>3</span><p>First to 10 cards wins</p>
+      </div>
+    </section>
+
+    <section class="entry-panel">
+      <div class="entry-tabs" role="tablist">
+        <button id="join-tab" class="entry-tab is-active" type="button" role="tab">Join a team</button>
+        <button id="host-tab" class="entry-tab" type="button" role="tab">Host a game</button>
+      </div>
+
+      <form id="join-form" class="entry-form">
+        <div class="entry-heading"><span>TEAM DEVICE</span><h2>Join the room</h2><p>Enter the code shown on the host screen.</p></div>
+        <label>Room code<input id="room-code" name="room" maxlength="4" autocomplete="off" autocapitalize="characters" placeholder="7KQ4" required></label>
+        <label>Team name<input id="team-name" name="name" maxlength="28" autocomplete="nickname" placeholder="The Needle Drops" required></label>
+        <button class="primary-button" type="submit">Join game <span>→</span></button>
+      </form>
+
+      <div id="host-form" class="entry-form" hidden>
+        <div class="entry-heading"><span>HOST DEVICE</span><h2>Start a new table</h2><p>Create the room here, then open the join link on each team device.</p></div>
+        <div class="host-feature"><i>02</i><p><strong>Starting tokens</strong><small>Challenge for 1 · buy a card for 3</small></p></div>
+        <div class="host-feature"><i>10</i><p><strong>Cards to victory</strong><small>Adjustable later; fixed for this first test</small></p></div>
+        <button id="create-room-button" class="primary-button" type="button">Create game <span>→</span></button>
+      </div>
+
+      <p id="entry-error" class="form-error" role="alert"></p>
+      <a id="test-lab-link" class="test-lab-link" href="/test-lab.html" hidden><span>LOCAL QA</span> Open the three-phone test lab <b>→</b></a>
+    </section>
+  </main>
+  <script type="module" src="/landing.js"></script>
+</body>
+</html>

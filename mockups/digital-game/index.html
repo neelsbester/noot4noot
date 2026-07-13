@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0c0b09">
+  <title>Noot4Noot — Digital Timeline Mockup</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="game-shell" aria-label="Noot4Noot digital game placement mockup">
+    <header class="game-bar">
+      <div class="brand-lockup">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-name">NOOT4NOOT</span>
+        <span class="room-code">ROOM&nbsp; 7KQ4</span>
+        <span class="active-tokens" title="Team Tangerine tokens"><i aria-hidden="true"></i><strong id="active-token-count">4</strong></span>
+      </div>
+
+      <div class="turn-status">
+        <span class="turn-dot" aria-hidden="true"></span>
+        <span><strong>Team Tangerine</strong>, place your card</span>
+      </div>
+
+      <div class="game-actions">
+        <div class="round-count">
+          <span>ROUND</span>
+          <strong>04</strong><span>/12</span>
+        </div>
+        <button id="host-controls-button" class="host-controls-button" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.37a1.7 1.7 0 0 0-1 .63 1.7 1.7 0 0 0-.38 1.08V21h-4v-.08A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.23 15a1.7 1.7 0 0 0-.63-1 1.7 1.7 0 0 0-1.08-.38H2.5v-4h.08A1.7 1.7 0 0 0 4.1 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 8.5 4.23a1.7 1.7 0 0 0 1-.63 1.7 1.7 0 0 0 .38-1.08V2.5h4v.08A1.7 1.7 0 0 0 15 4.1a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.37 8.5a1.7 1.7 0 0 0 .63 1 1.7 1.7 0 0 0 1.08.38H21v4h-.08A1.7 1.7 0 0 0 19.4 15Z"/></svg>
+          Host
+        </button>
+      </div>
+    </header>
+
+    <section class="play-stage">
+      <div class="stage-copy">
+        <span class="eyebrow">NOW PLAYING</span>
+        <h1 id="stage-title">Where does it belong?</h1>
+        <p id="stage-hint">Drag the mystery card into a gap, or tap a gap to place it.</p>
+      </div>
+
+      <div id="mystery-source" class="mystery-source">
+        <div id="mystery-card" class="card card-mystery" role="button" tabindex="0" aria-label="Mystery song card. Drag it to a placement gap.">
+          <div class="card-back">
+            <span class="back-kicker">NOOT</span>
+            <span class="record-grooves" aria-hidden="true"><i></i></span>
+            <span class="back-kicker back-kicker-bottom">4NOOT</span>
+          </div>
+          <div class="card-front mystery-front">
+            <span class="card-era">1985</span>
+            <span class="card-title">Take On Me</span>
+            <span class="card-artist">a-ha</span>
+            <span class="front-record" aria-hidden="true"></span>
+          </div>
+        </div>
+        <div class="sound-wave" aria-label="Music is playing">
+          <i></i><i></i><i></i><i></i><i></i>
+        </div>
+      </div>
+
+      <div class="stage-meta" aria-hidden="true">
+        <span>UNKNOWN YEAR</span>
+        <span class="meta-rule"></span>
+        <span>TRACK 04</span>
+      </div>
+    </section>
+
+    <section class="timeline-panel" aria-labelledby="timeline-title">
+      <div class="timeline-heading">
+        <div>
+          <span class="timeline-label">YOUR TIMELINE</span>
+          <h2 id="timeline-title">3 cards to victory</h2>
+        </div>
+        <div class="timeline-legend">
+          <span><i class="legend-swatch legend-gap"></i>Available gap</span>
+          <span><i class="legend-swatch legend-picked"></i>Your pick</span>
+        </div>
+      </div>
+
+      <div id="timeline" class="timeline" aria-label="Chronological card timeline">
+        <button class="drop-slot" type="button" data-slot="0" aria-label="Place before 1977">
+          <span class="drop-plus">+</span><span class="drop-label">BEFORE</span>
+        </button>
+
+        <article class="card card-known card-teal" data-year="1977">
+          <div class="card-face-art art-rings"></div>
+          <div class="known-card-copy"><strong>1977</strong><span>Dreams</span><small>Fleetwood Mac</small></div>
+        </article>
+
+        <button class="drop-slot" type="button" data-slot="1" aria-label="Place between 1977 and 1987">
+          <span class="drop-plus">+</span><span class="drop-label">DROP</span>
+        </button>
+
+        <article class="card card-known card-red" data-year="1987">
+          <div class="card-face-art art-sun"></div>
+          <div class="known-card-copy"><strong>1987</strong><span>Faith</span><small>George Michael</small></div>
+        </article>
+
+        <button class="drop-slot" type="button" data-slot="2" aria-label="Place between 1987 and 1999">
+          <span class="drop-plus">+</span><span class="drop-label">DROP</span>
+        </button>
+
+        <article class="card card-known card-gold" data-year="1999">
+          <div class="card-face-art art-stripes"></div>
+          <div class="known-card-copy"><strong>1999</strong><span>No Scrubs</span><small>TLC</small></div>
+        </article>
+
+        <button class="drop-slot" type="button" data-slot="3" aria-label="Place between 1999 and 2013">
+          <span class="drop-plus">+</span><span class="drop-label">DROP</span>
+        </button>
+
+        <article class="card card-known card-blue" data-year="2013">
+          <div class="card-face-art art-grid"></div>
+          <div class="known-card-copy"><strong>2013</strong><span>Royals</span><small>Lorde</small></div>
+        </article>
+
+        <button class="drop-slot" type="button" data-slot="4" aria-label="Place after 2013">
+          <span class="drop-plus">+</span><span class="drop-label">AFTER</span>
+        </button>
+      </div>
+
+      <div class="timeline-track" aria-hidden="true"><span></span></div>
+    </section>
+
+    <footer class="action-bar">
+      <button id="reset-button" class="button button-quiet" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8m0-5v5h5"/></svg>
+        Reset demo
+      </button>
+
+      <p id="selection-copy" class="selection-copy" aria-live="polite">Choose a gap to make your guess</p>
+
+      <button id="lock-button" class="button button-lock" type="button" disabled>
+        <span class="lock-idle">Lock in position</span>
+        <span class="lock-busy">Locking in…</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>
+      </button>
+    </footer>
+
+    <section id="challenge-panel" class="challenge-panel" aria-hidden="true" aria-labelledby="challenge-title">
+      <div class="challenge-intro">
+        <span class="challenge-kicker"><i aria-hidden="true"></i> CHALLENGE WINDOW</span>
+        <strong id="challenge-title">Think they placed it wrong?</strong>
+        <small id="challenge-copy">The first team to challenge spends 1 token and claims the attempt.</small>
+      </div>
+
+      <div class="challenge-options" aria-label="Teams able to challenge">
+        <button class="challenge-team" type="button" data-challenge-team="vinyl">
+          <span class="team-avatar team-vinyl">V</span>
+          <span class="challenge-team-copy"><strong>Team Vinyl</strong><small><b data-token-team="vinyl">2</b> tokens</small></span>
+          <span class="challenge-cost">CHALLENGE <b>−1</b></span>
+        </button>
+        <button class="challenge-team" type="button" data-challenge-team="blue">
+          <span class="team-avatar team-blue">B</span>
+          <span class="challenge-team-copy"><strong>Blue Notes</strong><small><b data-token-team="blue">3</b> tokens</small></span>
+          <span class="challenge-cost">CHALLENGE <b>−1</b></span>
+        </button>
+      </div>
+
+      <button id="close-challenge-button" class="close-challenge-button" type="button">
+        No challenge · continue to reveal
+      </button>
+    </section>
+
+    <div id="reveal-banner" class="reveal-banner" role="status" aria-live="polite" aria-hidden="true">
+      <div class="result-seal" aria-hidden="true"><span id="result-symbol">✓</span></div>
+      <div class="result-copy">
+        <span id="result-label">PERFECT PLACEMENT</span>
+        <strong id="result-title">1985 · TAKE ON ME</strong>
+        <small>a-ha</small>
+      </div>
+      <div class="result-score"><span id="result-points">+1</span><small id="result-score-label">CARD</small></div>
+    </div>
+
+    <div id="host-backdrop" class="host-backdrop" aria-hidden="true"></div>
+    <aside id="host-drawer" class="host-drawer" aria-hidden="true" aria-labelledby="host-drawer-title">
+      <div class="host-drawer-header">
+        <div><span>GAME MASTER</span><h2 id="host-drawer-title">Host table</h2></div>
+        <button id="close-host-button" type="button" aria-label="Close host controls">×</button>
+      </div>
+
+      <div class="host-rule-card">
+        <span class="token-token" aria-hidden="true"></span>
+        <div><strong>Token economy</strong><small>+1 for naming both song and artist · −1 to challenge · −3 for a random card</small></div>
+      </div>
+
+      <div class="host-section-heading"><span>TEAMS</span><small>Host managed</small></div>
+      <div class="host-team-list">
+        <article class="host-team" data-host-team="tangerine">
+          <div class="host-team-heading"><span class="team-avatar team-tangerine">T</span><div><strong>Team Tangerine</strong><small>Active team · 4 cards</small></div><output data-token-output="tangerine">4</output></div>
+          <div class="host-team-actions">
+            <button type="button" data-token-adjust="tangerine" data-delta="-1" aria-label="Remove one Team Tangerine token">−</button>
+            <button type="button" class="award-token" data-token-adjust="tangerine" data-delta="1">Correct title + artist&nbsp; <b>+1</b></button>
+            <button type="button" data-token-adjust="tangerine" data-delta="1" aria-label="Add one Team Tangerine token">+</button>
+            <button type="button" class="buy-card" data-buy-card="tangerine">Random card&nbsp; <b>−3</b></button>
+          </div>
+        </article>
+
+        <article class="host-team" data-host-team="vinyl">
+          <div class="host-team-heading"><span class="team-avatar team-vinyl">V</span><div><strong>Team Vinyl</strong><small>3 cards</small></div><output data-token-output="vinyl">2</output></div>
+          <div class="host-team-actions">
+            <button type="button" data-token-adjust="vinyl" data-delta="-1" aria-label="Remove one Team Vinyl token">−</button>
+            <button type="button" class="award-token" data-token-adjust="vinyl" data-delta="1">Correct title + artist&nbsp; <b>+1</b></button>
+            <button type="button" data-token-adjust="vinyl" data-delta="1" aria-label="Add one Team Vinyl token">+</button>
+            <button type="button" class="buy-card" data-buy-card="vinyl">Random card&nbsp; <b>−3</b></button>
+          </div>
+        </article>
+
+        <article class="host-team" data-host-team="blue">
+          <div class="host-team-heading"><span class="team-avatar team-blue">B</span><div><strong>Blue Notes</strong><small>5 cards</small></div><output data-token-output="blue">3</output></div>
+          <div class="host-team-actions">
+            <button type="button" data-token-adjust="blue" data-delta="-1" aria-label="Remove one Blue Notes token">−</button>
+            <button type="button" class="award-token" data-token-adjust="blue" data-delta="1">Correct title + artist&nbsp; <b>+1</b></button>
+            <button type="button" data-token-adjust="blue" data-delta="1" aria-label="Add one Blue Notes token">+</button>
+            <button type="button" class="buy-card" data-buy-card="blue">Random card&nbsp; <b>−3</b></button>
+          </div>
+        </article>
+      </div>
+
+      <div class="host-challenge-status">
+        <span>CHALLENGE STATUS</span>
+        <strong id="host-challenge-copy">Not open yet</strong>
+      </div>
+    </aside>
+
+    <div id="game-toast" class="game-toast" role="status" aria-live="polite"></div>
+
+    <div id="drag-ghost" class="drag-ghost" aria-hidden="true"></div>
+  </main>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
