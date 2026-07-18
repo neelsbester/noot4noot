@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import ExitStack
+import os
 from pathlib import Path
+import sys
 from urllib.parse import urlparse
 
-from playwright.sync_api import BrowserContext, ConsoleMessage, Page, Route, expect, sync_playwright
+from playwright.sync_api import APIRequestContext, BrowserContext, ConsoleMessage, Page, Route, expect, sync_playwright
 
 
 SPOTIFY_SDK_STUB = """
@@ -29,13 +32,21 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--url", default="http://127.0.0.1:5173")
     parser.add_argument("--screenshot", type=Path, default=Path("/tmp/noot4noot-three-phone-smoke.png"))
+    parser.add_argument("--access-client-id", default=os.environ.get("NOOT4NOOT_ACCESS_CLIENT_ID", ""))
+    parser.add_argument("--access-client-secret", default=os.environ.get("NOOT4NOOT_ACCESS_CLIENT_SECRET", ""))
     args = parser.parse_args()
+    if bool(args.access_client_id) != bool(args.access_client_secret):
+        parser.error("both Access service-token values are required")
     origin = f"{urlparse(args.url).scheme}://{urlparse(args.url).netloc}"
+    access_headers = {
+        "CF-Access-Client-Id": args.access_client_id,
+        "CF-Access-Client-Secret": args.access_client_secret,
+    } if args.access_client_id else {}
     console_errors: list[str] = []
     page_errors: list[str] = []
     spotify_requests: list[tuple[str, str]] = []
 
-    with sync_playwright() as playwright:
+    with sync_playwright() as playwright, ExitStack() as cleanup:
         browser = playwright.chromium.launch(headless=True)
         admin = playwright.request.new_context(
             base_url=origin,
@@ -44,16 +55,24 @@ def main() -> None:
                 "X-Noot4Noot-Admin-Email": "neelsbester1993@gmail.com",
             },
         )
+        resources: dict[str, object] = {"invite_ids": [], "room": ""}
+        cleanup.callback(cleanup_test_state, admin, resources, access_headers)
         invite_response = admin.post(
             "/api/admin/invites",
             data={"label": "Automated three-phone test", "lifetime": "day", "maxRedemptions": 10},
+            headers=access_headers,
+            max_redirects=0,
         )
         assert invite_response.status == 201, invite_response.text()
-        invite_url = invite_response.json()["url"]
+        invite_payload = invite_response.json()
+        invite_url = invite_payload["url"]
+        resources["invite_ids"] = [invite_payload["invite"]["id"]]
 
         host_context = browser.new_context(viewport={"width": 390, "height": 844})
         team_a_context = browser.new_context(viewport={"width": 390, "height": 844})
         team_b_context = browser.new_context(viewport={"width": 390, "height": 844})
+        for context in (host_context, team_a_context, team_b_context):
+            authenticate_access(context, origin, access_headers)
         host_context.add_init_script("""
           localStorage.setItem('noot4noot_spotify_token', 'test-token');
           localStorage.setItem('noot4noot_spotify_token_expiry', String(Date.now() + 3_600_000));
@@ -78,6 +97,7 @@ def main() -> None:
         host.locator("#lobby").wait_for(state="visible")
         room = host.locator("#room-code").inner_text().strip()
         assert len(room) == 4
+        resources["room"] = room
 
         join_team(team_a, invite_url, room, "Needle Crew")
         join_team(team_b, invite_url, room, "Bassline Club")
@@ -171,15 +191,27 @@ def main() -> None:
 
         admin_context = browser.new_context(
             viewport={"width": 1100, "height": 900},
-            extra_http_headers={"X-Noot4Noot-Admin-Email": "neelsbester1993@gmail.com"},
+            extra_http_headers={} if access_headers else {
+                "X-Noot4Noot-Admin-Email": "neelsbester1993@gmail.com",
+            },
         )
+        authenticate_access(admin_context, origin, access_headers)
         admin_page = new_observed_page(admin_context, console_errors, page_errors)
         admin_page.goto(f"{origin}/admin", wait_until="domcontentloaded")
         admin_page.locator("#invite-form").wait_for(state="visible")
-        admin_page.locator("#invite-label").fill("Browser-created invite")
-        admin_page.locator("#invite-lifetime").select_option("month")
+        browser_invite_label = f"Browser smoke {room}"
+        admin_page.locator("#invite-label").fill(browser_invite_label)
+        admin_page.locator("#invite-lifetime").select_option("day")
         admin_page.locator("#invite-cap").fill("3")
-        admin_page.locator("#invite-form button[type=submit]").click()
+        with admin_page.expect_response(
+            lambda response: response.url == f"{origin}/api/admin/invites"
+            and response.request.method == "POST",
+        ) as created_invite:
+            admin_page.locator("#invite-form button[type=submit]").click()
+        created_invite_response = created_invite.value
+        created_invite_payload = created_invite_response.json()
+        resources["invite_ids"].append(created_invite_payload["invite"]["id"])
+        assert created_invite_response.status == 201
         admin_page.locator("#invite-output").wait_for(state="visible")
         expect(admin_page.locator("#invite-url")).to_contain_text("?invite=")
         admin_context.close()
@@ -231,6 +263,55 @@ def install_spotify_mocks(
             route.fulfill(status=204, body="")
 
     context.route("https://api.spotify.com/v1/**", mock_api)
+
+
+def authenticate_access(
+    context: BrowserContext,
+    origin: str,
+    access_headers: dict[str, str],
+) -> None:
+    if not access_headers:
+        return
+    response = context.request.get(
+        f"{origin}/api/health",
+        headers=access_headers,
+        max_redirects=0,
+    )
+    assert response.ok, f"Cloudflare Access authentication failed: {response.status} {response.text()}"
+
+
+def cleanup_test_state(
+    admin: APIRequestContext,
+    resources: dict[str, object],
+    access_headers: dict[str, str],
+) -> None:
+    failures: list[str] = []
+    room = resources.get("room")
+    if isinstance(room, str) and room:
+        response = admin.post(
+            f"/api/admin/rooms/{room}/close",
+            data={},
+            headers=access_headers,
+            max_redirects=0,
+        )
+        if response.status != 200:
+            failures.append(f"close room {room}: {response.status}")
+    invite_ids = resources.get("invite_ids")
+    if isinstance(invite_ids, list):
+        for invite_id in invite_ids:
+            response = admin.post(
+                f"/api/admin/invites/{invite_id}/revoke",
+                data={},
+                headers=access_headers,
+                max_redirects=0,
+            )
+            if response.status != 200:
+                failures.append(f"revoke invite {invite_id}: {response.status}")
+    if failures:
+        message = "Test cleanup failed: " + ", ".join(failures)
+        if sys.exc_info()[0] is None:
+            raise AssertionError(message)
+        print(message, file=sys.stderr)
 
 
 def new_observed_page(

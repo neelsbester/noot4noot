@@ -89,6 +89,16 @@ Pushes and pull requests run verification. A push to `main` may deploy staging
 after checks pass. Production is a separate manual workflow and requires the
 owner’s explicit approval.
 
+The first staging deployment was completed on 2026-07-18. The account-level
+Workers namespace is `neelsbester.workers.dev`, but `workers_dev` and preview
+URLs are disabled for this game; use the Access-protected custom domain above.
+After deployment, CI authenticates with one exact staging-only Access service
+token and runs the same three-phone browser flow against the hosted Worker.
+The Worker rejects that automation identity in production. Its credentials are
+stored only as `NOOT4NOOT_ACCESS_CLIENT_ID` and
+`NOOT4NOOT_ACCESS_CLIENT_SECRET` in the GitHub `staging` environment. The
+current token expires on 2027-07-18 and should be rotated before then.
+
 ## Legacy reference
 
 The Python `service.py`/`server.py`, legacy scanner in `player/`, card generator

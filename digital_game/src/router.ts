@@ -5,7 +5,7 @@ import type {
   RoomSnapshot,
   ServiceResult,
 } from "./contracts";
-import { requireAccessIdentity } from "./access";
+import { isAdminIdentity, requireAccessIdentity } from "./access";
 import { accessCookie, readAccessToken, readRoomToken, roomCookie } from "./cookies";
 import { DECKS } from "./decks";
 import { GameError } from "./domain/errors";
@@ -265,10 +265,18 @@ async function requestRateKey(request: Request, scope: string): Promise<string> 
 }
 
 async function requireAdmin(request: Request, env: CloudflareEnv): Promise<void> {
-  const email = env.ENVIRONMENT === "local"
-    ? request.headers.get("X-Noot4Noot-Admin-Email")
-    : (await requireAccessIdentity(request, env.ACCESS_TEAM_DOMAIN, env.ACCESS_AUD)).email;
-  if (email?.toLocaleLowerCase() !== env.ADMIN_EMAIL.toLocaleLowerCase()) {
+  if (env.ENVIRONMENT === "local") {
+    const email = request.headers.get("X-Noot4Noot-Admin-Email");
+    if (email?.toLocaleLowerCase() === env.ADMIN_EMAIL.toLocaleLowerCase()) return;
+    throw new GameError("Owner access is required", "admin_required", 403);
+  }
+  const identity = await requireAccessIdentity(request, env.ACCESS_TEAM_DOMAIN, env.ACCESS_AUD);
+  if (!isAdminIdentity(
+    identity,
+    env.ADMIN_EMAIL,
+    env.ENVIRONMENT,
+    env.ACCESS_AUTOMATION_CLIENT_ID,
+  )) {
     throw new GameError("Owner access is required", "admin_required", 403);
   }
 }

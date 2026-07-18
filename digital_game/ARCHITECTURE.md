@@ -136,6 +136,9 @@ Durable Object namespaces.
 - Staging route: `staging.noot4noot.bestermedia.me`
 - Production route: `noot4noot.bestermedia.me`
 - Staging is fully protected by Cloudflare Access.
+- One exact Access service identity may administer staging solely for the
+  post-deploy three-phone smoke; its JWT claim shape and client ID are verified
+  by the Worker, and the same identity is rejected in production.
 - Production `/admin*` is protected by Cloudflare Access.
 - Environment-specific Spotify client IDs are non-secret variables.
 - Deployment credentials exist only as GitHub Actions secrets.

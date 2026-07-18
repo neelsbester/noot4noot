@@ -38,6 +38,7 @@
   },
   "vars": {
     "ACCESS_AUD": "",
+    "ACCESS_AUTOMATION_CLIENT_ID": "",
     "ACCESS_TEAM_DOMAIN": "",
     "ADMIN_EMAIL": "neelsbester1993@gmail.com",
     "ENVIRONMENT": "development",
@@ -59,6 +60,7 @@
       },
       "vars": {
         "ACCESS_AUD": "",
+        "ACCESS_AUTOMATION_CLIENT_ID": "",
         "ACCESS_TEAM_DOMAIN": "",
         "ADMIN_EMAIL": "neelsbester1993@gmail.com",
         "ENVIRONMENT": "local",
@@ -81,6 +83,7 @@
       ],
       "vars": {
         "ACCESS_AUD": "c84b996b4a029470ea3d22ca01f4f286fe728508ca08c6f0f14510bfd5653e51",
+        "ACCESS_AUTOMATION_CLIENT_ID": "1c0e88d97a5debee24b7aac6a7cac642.access",
         "ACCESS_TEAM_DOMAIN": "https://besterfamily.cloudflareaccess.com",
         "ADMIN_EMAIL": "neelsbester1993@gmail.com",
         "ENVIRONMENT": "staging",
@@ -103,6 +106,7 @@
       ],
       "vars": {
         "ACCESS_AUD": "",
+        "ACCESS_AUTOMATION_CLIENT_ID": "",
         "ACCESS_TEAM_DOMAIN": "",
         "ADMIN_EMAIL": "neelsbester1993@gmail.com",
         "ENVIRONMENT": "production",

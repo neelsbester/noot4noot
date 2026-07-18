@@ -4,7 +4,20 @@ import { GameError } from "./domain/errors";
 const keySets = new Map<string, JWTVerifyGetKey>();
 
 export interface AccessIdentity {
-  email: string;
+  email: string | null;
+  serviceTokenClientId: string | null;
+}
+
+export function isAdminIdentity(
+  identity: AccessIdentity,
+  adminEmail: string,
+  environment: string,
+  automationClientId: string,
+): boolean {
+  if (identity.email?.toLocaleLowerCase() === adminEmail.toLocaleLowerCase()) return true;
+  return environment === "staging"
+    && Boolean(automationClientId)
+    && identity.serviceTokenClientId === automationClientId;
 }
 
 export async function requireAccessIdentity(
@@ -26,10 +39,18 @@ export async function requireAccessIdentity(
       audience: audiences,
       algorithms: ["RS256"],
     });
-    if (payload.type !== "app" || typeof payload.email !== "string" || !payload.email) {
-      throw new Error("Access token does not contain a user identity");
+    if (payload.type !== "app") throw new Error("Access token is not an application token");
+    const email = typeof payload.email === "string" && payload.email ? payload.email : null;
+    const commonName = typeof payload.common_name === "string" && payload.common_name
+      ? payload.common_name
+      : null;
+    if (email && typeof payload.sub === "string" && payload.sub && !commonName) {
+      return { email, serviceTokenClientId: null };
     }
-    return { email: payload.email };
+    if (!email && payload.sub === "" && commonName) {
+      return { email: null, serviceTokenClientId: commonName };
+    }
+    throw new Error("Access token contains an ambiguous identity");
   } catch {
     throw new GameError("Owner access is required", "admin_required", 403);
   }
