@@ -57,7 +57,7 @@ The Worker:
 
 1. validates origin, content type, body size, route parameters, and access
    session;
-2. resolves a room through the directory;
+2. addresses the room object directly by its validated four-character code;
 3. calls typed Durable Object RPC methods;
 4. returns role-scoped JSON or upgrades the request to the room WebSocket.
 
@@ -108,8 +108,8 @@ buy/replace windows.
 - The full curated deck exists in Worker code but current hidden song metadata
   remains inside the room object.
 - Before reveal, normal teams receive only a mystery marker.
-- Host controllers receive the Spotify URI needed for playback but no title,
-  artist, or year.
+- Only the original playback host receives the Spotify URI before reveal.
+  Delegated team controllers receive the same mystery marker as teams.
 - Active placement is private until locked.
 - A contest placement is private to the challenger and host controllers until
   locked.
@@ -124,8 +124,8 @@ buy/replace windows.
 - A room alarm is always scheduled at the earliest of challenge deadline and
   24-hour inactivity expiry.
 - Challenge alarms resolve idempotently and then reschedule room expiry.
-- Expired rooms become terminal before their data is deleted; the directory
-  drops their public code mapping.
+- Expired rooms become terminal before retry-safe cleanup deletes their room
+  data and prunes the directory summary.
 - Results are retained for at most 24 hours.
 
 ## Environments
@@ -145,9 +145,7 @@ Durable Object namespaces.
 - Pure rule tests cover every action and phase transition.
 - Workers-runtime integration tests exercise bindings, SQLite persistence,
   alarms, authorization, idempotency, and serialization secrecy.
-- Browser unit tests cover session storage, timelines, reveal helpers, and
-  Spotify error handling.
 - Playwright drives host plus two isolated phone contexts through lobby,
-  purchase/play/replace, placement, contest/pass, reveal, next round, removal,
-  finish, and rematch flows.
-- Responsive screenshots cover 390×844 phones and wider tablet/desktop views.
+  purchase/play/replace, placement, contest/pass, reveal, next round, delegated
+  controls, and owner invite creation.
+- Responsive screenshots and hard width assertions cover 390×844 phones.

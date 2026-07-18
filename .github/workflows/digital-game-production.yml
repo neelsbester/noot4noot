@@ -1,0 +1,34 @@
+name: Digital game production
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: "Type DEPLOY NOOT4NOOT PRODUCTION"
+        required: true
+        type: string
+
+jobs:
+  deploy:
+    if: inputs.confirmation == 'DEPLOY NOOT4NOOT PRODUCTION'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: digital_game/package-lock.json
+      - run: npm ci
+        working-directory: digital_game
+      - run: npm run check
+        working-directory: digital_game
+      - run: npm run build
+        working-directory: digital_game
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: digital_game
+          command: deploy --env production

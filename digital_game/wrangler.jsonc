@@ -80,8 +80,8 @@
         }
       ],
       "vars": {
-        "ACCESS_AUD": "",
-        "ACCESS_TEAM_DOMAIN": "",
+        "ACCESS_AUD": "c84b996b4a029470ea3d22ca01f4f286fe728508ca08c6f0f14510bfd5653e51",
+        "ACCESS_TEAM_DOMAIN": "https://besterfamily.cloudflareaccess.com",
         "ADMIN_EMAIL": "neelsbester1993@gmail.com",
         "ENVIRONMENT": "staging",
         "SPOTIFY_CLIENT_ID": "d924c985a04941a1bfc8ffd87fa2e335"

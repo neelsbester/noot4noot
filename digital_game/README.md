@@ -1,165 +1,96 @@
-# Noot4Noot Digital Game
+# Noot4Noot Multiplayer
 
-The production rewrite is in progress on the `feature/cloudflare-multiplayer`
-branch. [PRODUCT_SPEC.md](PRODUCT_SPEC.md) is the agreed product contract and
-[ARCHITECTURE.md](ARCHITECTURE.md) describes the Cloudflare Worker and Durable
-Object target.
+The primary product is a private, invite-only music timeline game for one host
+and 2–8 teams. The production implementation is a Cloudflare Worker with one
+Durable Object per room, a small directory Durable Object, static browser
+assets, WebSocket revision notifications, and Spotify playback in the original
+host browser.
 
-Standalone local multiplayer mode for Noot4Noot. One browser starts as the host table and each team joins from its own phone or tablet. A team can temporarily switch to scoped host controls after entering the host's one-time control code, so hosting duties can move around the room without exposing the original host token. The game uses digital song cards, server-authoritative timelines, Spotify playback, challenges, passes, and host-managed tokens.
+- [PRODUCT_SPEC.md](PRODUCT_SPEC.md) is the agreed product contract.
+- [ARCHITECTURE.md](ARCHITECTURE.md) describes boundaries and security rules.
+- The older Python service and server remain local reference implementations.
 
-This directory is the July 2026 development checkpoint. See [ARCHITECTURE.md](ARCHITECTURE.md) for the state model, API, visibility rules, and implementation notes.
+## Local development
 
-## Quick start
-
-Run from the repository root in the Linux VM:
-
-```bash
-python3 -m venv .venv
-.venv/bin/pip install -r requirements-dev.txt
-.venv/bin/python -m playwright install chromium
-```
-
-Then start the game:
+From this directory:
 
 ```bash
-.venv/bin/python -m digital_game.server --quick-tunnel
+npm ci
+npm run check
+npm run dev
 ```
 
-The server prints:
+The local Worker is available at `http://127.0.0.1:5173`. Local owner routes
+accept the `X-Noot4Noot-Admin-Email` test header; deployed environments require
+a valid signed Cloudflare Access application token.
 
-- `http://127.0.0.1:5173` for hosting on the PC.
-- A temporary `https://...trycloudflare.com` URL for phones and iPads.
-
-Open the public HTTPS URL on an iPad if the iPad will be the host. Open the same URL on team devices and join with the four-character room code.
-
-Rooms are saved to `digital_game/.data/rooms.json` after every change and restored when the Python server restarts. Browser session tokens remain valid after recovery.
-
-## Stable tunnel during development
-
-`--quick-tunnel` starts and stops Cloudflare together with the server, so its hostname changes on every restart. To keep one temporary hostname while reloading the Python server, run Cloudflare separately.
-
-Terminal 1:
+To exercise the actual host and team screens in three isolated portrait browser
+contexts:
 
 ```bash
-~/.local/bin/cloudflared tunnel --url http://localhost:5173 --no-autoupdate
+../.venv/bin/python ../scripts/test_three_phone_lab.py
 ```
 
-Copy the generated HTTPS URL, then use it in Terminal 2:
+The smoke test creates an invite, creates and joins a room through the browser,
+readies both teams, and covers:
+
+- host-controlled Spotify playback with the external Spotify APIs mocked;
+- placement, pass, automatic reveal, and next round;
+- turn-start card purchase and a paid song replacement;
+- contest placement and automatic reveal;
+- delegated host controls without playback metadata;
+- owner invite creation;
+- 390×844 layout width and browser-console errors.
+
+Spotify login itself remains interactive and requires Spotify Premium.
+
+## Commands
 
 ```bash
-.venv/bin/python -m digital_game.server \
-  --public-url https://YOUR-TUNNEL.trycloudflare.com
+npm run check                 # generated bindings, types, lint, Worker tests
+npm run build                 # production-format dry run
+npm run dev                   # local Worker on port 5173
+npm run deploy:staging        # staging only
+npm run deploy:production     # never run without explicit owner approval
 ```
 
-The Cloudflare process can remain running while the Python process is restarted. The URL is still temporary and only lasts while that tunnel process is alive.
+The Worker tests cover the pure game state machine, SQLite persistence,
+role-scoped secrecy, idempotency, concurrent mutations, invite caps, expiry,
+WebSocket upgrades, security headers, signed Access JWTs, and the HTTP
+create/join flow.
 
-For local-only testing:
+## Spotify
 
-```bash
-.venv/bin/python -m digital_game.server
-```
-
-## Spotify setup
-
-The digital host reads `VITE_SPOTIFY_CLIENT_ID` from `player/.env`.
-
-Register the exact callback matching the host origin:
+Spotify uses Authorization Code with PKCE entirely in the playback browser.
+The registered callbacks are:
 
 ```text
 http://127.0.0.1:5173/callback
-https://YOUR-TUNNEL.trycloudflare.com/callback
+https://staging.noot4noot.bestermedia.me/callback
+https://noot4noot.bestermedia.me/callback
 ```
 
-Spotify no longer accepts `http://localhost` callbacks. A callback must match exactly, including protocol, hostname, port, path, and trailing slash.
+Only the original room creator receives the current hidden Spotify URI. Team
+devices may open controller mode, but Spotify remains on the original host.
+The host manually starts every new or replacement song. Reveal does not pause
+the current track; next round and replacement transitions do.
 
-A device only needs Spotify authentication while it is handling playback. Spotify sessions remain local to that browser, including when a team switches into host mode. The requested scopes support Spotify Connect and Spotify Web Playback SDK audio. Spotify Premium is required.
+## Environments
 
-After connecting, the host can choose:
+- Local: `http://127.0.0.1:5173`
+- Staging: `https://staging.noot4noot.bestermedia.me`
+- Production: `https://noot4noot.bestermedia.me`
 
-- **This browser** to play directly in the host browser, including mobile Safari. iOS may require a second Play tap the first time because audio must be unlocked by a user gesture.
-- Any currently available Spotify Connect device.
+Staging is protected as a whole by Cloudflare Access. Production deployment is
+manual; only the owner console will be protected by Access, while players enter
+through revocable group invite links.
 
-## Game rules implemented
+Pushes and pull requests run verification. A push to `main` may deploy staging
+after checks pass. Production is a separate manual workflow and requires the
+owner’s explicit approval.
 
-- One host and 2-8 teams.
-- Four-character room codes with browser-session reconnect tokens.
-- Every team header has a **Host** switch. The first switch requires the four-digit control code shown only on the host screen. Once authorized, that team session can use scoped host actions without receiving the room's original host token; **Team view** returns to its normal private screen.
-- Each team starts with two tokens and one timeline card.
-- The active team places the mystery card and locks its position.
-- Rival teams can challenge for one token or choose **No challenge**.
-- Only the first team to challenge can place a rival answer.
-- In games with more than two teams, the challenge window closes automatically once every rival has passed.
-- A correct active placement wins the card. A correct challenge steals the card. If neither answer is correct, the card is discarded for that game.
-- The host awards one token when a team gets both title and artist correct.
-- The host can spend three team tokens to add a random card to that team's timeline.
-- Tokens are clamped between zero and five.
-- The first team to ten cards wins by default.
+## Legacy reference
 
-## Visual behavior
-
-- Cards are coloured consistently by release decade, from the 1950s through the 2020s.
-- The active card is dragged or tapped into a timeline gap and explicitly locked.
-- Correct reveals expand into the chosen gap and pulse with a green confirmation.
-- Incorrect reveals leave red wrong-position markers while the revealed card travels to the server-calculated correct gap.
-- The result banner waits until the placement explanation animation finishes.
-- The pre-reveal timeline remains visible during this animation; won cards become permanent on the following round.
-
-## Useful options
-
-```bash
-.venv/bin/python -m digital_game.server --help
-.venv/bin/python -m digital_game.server --deck songs.csv
-.venv/bin/python -m digital_game.server --starting-tokens 2 --target-cards 10
-.venv/bin/python -m digital_game.server --public-url https://example.test
-.venv/bin/python -m digital_game.server --state-file /path/to/rooms.json
-```
-
-`white_people_turnt_shuffled.csv` is the default deck when present. Otherwise the server uses `songs.csv`.
-
-## Verification
-
-Run the focused tests:
-
-```bash
-.venv/bin/python -m pytest tests/test_digital_game.py -q -s
-```
-
-Run the full Python suite, including the adjacent voice experiment:
-
-```bash
-.venv/bin/python -m pytest tests/ voice_lab/tests -q
-```
-
-Checkpoint baseline:
-
-- Digital game tests: 17 passing.
-- Full Python suite: 102 passing, with one existing ReportLab deprecation warning.
-- Host and team JavaScript modules parse successfully.
-- The three-phone headless Chromium smoke flow passes at 390x844 per device.
-- The smoke flow covers room creation, Spotify playback command mocking,
-  placement, song skipping, reveal, and correct-placement animation.
-
-## Current limitations and next steps
-
-1. Choose a stable deployment target; `noot4noot.bestermedia.me` still serves
-   the earlier card-scanner player at this checkpoint.
-2. Add explicit room teardown and expiry for abandoned persisted rooms.
-3. Improve Spotify diagnostics for expired scopes, unavailable devices, and
-   iOS autoplay failures.
-4. Add JavaScript unit coverage for decade mapping, reveal markup,
-   browser-player state, and test-lab helpers.
-5. Decide whether challenge windows need an optional host-configured timer.
-6. Replace polling with WebSockets or server-sent events only if measured
-   multiplayer synchronization warrants the added complexity.
-
-For local multi-device QA, open `http://127.0.0.1:5173/test-lab`. It presents one host and two isolated team sessions in portrait phone frames and can create and quick-start a disposable room.
-
-With the server running, execute the reusable browser smoke test with:
-
-```bash
-.venv/bin/python scripts/test_three_phone_lab.py
-```
-
-It drives placement, lock-in, no-challenge, reveal, and the correct-placement animation across all three phone frames. Spotify authorization remains interactive and is intentionally outside this smoke test.
-
-The original interactive design mockup is retained under `mockups/digital-game/` as a visual reference. The live implementation is under `digital_game/web/`.
+The Python `service.py`/`server.py`, legacy scanner in `player/`, card generator
+in `src/`, and old test-lab assets are retained only as references. New game
+rules belong in `src/domain/game.ts` with Worker-runtime tests.
