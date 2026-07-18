@@ -75,10 +75,13 @@ def main() -> None:
         resources["invite_ids"] = [invite_payload["invite"]["id"]]
 
         host_context = new_phone_context(browser)
+        authenticate_access(host_context, origin, access_headers)
+        access_cookies = host_context.cookies()
         team_a_context = new_phone_context(browser)
         team_b_context = new_phone_context(browser)
-        for context in (host_context, team_a_context, team_b_context):
-            authenticate_access(context, origin, access_headers)
+        if access_cookies:
+            team_a_context.add_cookies(access_cookies)
+            team_b_context.add_cookies(access_cookies)
         host_context.add_init_script("""
           localStorage.setItem('noot4noot_spotify_token', 'test-token');
           localStorage.setItem('noot4noot_spotify_token_expiry', String(Date.now() + 3_600_000));
@@ -285,12 +288,25 @@ def authenticate_access(
 ) -> None:
     if not access_headers:
         return
-    response = context.request.get(
-        f"{origin}/api/health",
-        headers=access_headers,
-        max_redirects=0,
-    )
-    assert response.ok, f"Cloudflare Access authentication failed: {response.status} {response.text()}"
+
+    def add_access_headers(route: Route) -> None:
+        request_url = urlparse(route.request.url)
+        request_origin = f"{request_url.scheme}://{request_url.netloc}"
+        if request_origin != origin:
+            route.continue_()
+            return
+        route.continue_(headers={**route.request.headers, **access_headers})
+
+    context.route("**/*", add_access_headers)
+    page = context.new_page()
+    try:
+        page.goto(f"{origin}/api/health", wait_until="domcontentloaded")
+        expect(page.locator("body")).to_contain_text('"status":"ok"', timeout=45_000)
+    finally:
+        page.close()
+        context.unroute("**/*", add_access_headers)
+
+    assert context.cookies(), "Cloudflare Access authentication did not establish a browser session"
 
 
 def cleanup_test_state(
