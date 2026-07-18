@@ -33,6 +33,7 @@ CHROME_USER_AGENT = (
     "AppleWebKit/537.36 (KHTML, like Gecko) "
     "Chrome/149.0.0.0 Safari/537.36"
 )
+STAGING_ORIGIN = "https://staging.noot4noot.bestermedia.me"
 
 
 def main() -> None:
@@ -44,6 +45,8 @@ def main() -> None:
     args = parser.parse_args()
     if bool(args.access_client_id) != bool(args.access_client_secret):
         parser.error("both Access service-token values are required")
+    if args.access_client_id and args.url.rstrip("/") != STAGING_ORIGIN:
+        parser.error(f"Access service-token values may only be sent to {STAGING_ORIGIN}")
     origin = f"{urlparse(args.url).scheme}://{urlparse(args.url).netloc}"
     access_headers = {
         "CF-Access-Client-Id": args.access_client_id,
