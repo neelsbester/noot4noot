@@ -67,3 +67,4 @@ digital_game/.data/
 # Local agent/tool configuration
 .bridgespace/
 .claude/
+.wrangler/
