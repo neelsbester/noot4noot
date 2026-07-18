@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 from contextlib import ExitStack
 import os
 from pathlib import Path
@@ -50,6 +51,7 @@ def main() -> None:
     } if args.access_client_id else {}
     console_errors: list[str] = []
     page_errors: list[str] = []
+    handled_conflict_pages: list[str] = []
     spotify_requests: list[tuple[str, str]] = []
 
     with sync_playwright() as playwright, ExitStack() as cleanup:
@@ -93,9 +95,9 @@ def main() -> None:
         install_spotify_mocks(team_b_context, spotify_requests)
 
         pages = [
-            new_observed_page(host_context, console_errors, page_errors),
-            new_observed_page(team_a_context, console_errors, page_errors),
-            new_observed_page(team_b_context, console_errors, page_errors),
+            new_observed_page(host_context, console_errors, page_errors, handled_conflict_pages),
+            new_observed_page(team_a_context, console_errors, page_errors, handled_conflict_pages),
+            new_observed_page(team_b_context, console_errors, page_errors, handled_conflict_pages),
         ]
         host, team_a, team_b = pages
 
@@ -158,7 +160,6 @@ def main() -> None:
         controller.locator("#controller-note").wait_for(state="visible")
         assert controller.locator("#spotify-box").is_hidden()
         controller.locator("#back-to-team").wait_for(state="visible")
-        controller.close()
 
         host.locator("#next-round").click()
         expect(host.locator("#round-number")).to_have_text("2")
@@ -207,7 +208,12 @@ def main() -> None:
             },
         )
         authenticate_access(admin_context, origin, access_headers)
-        admin_page = new_observed_page(admin_context, console_errors, page_errors)
+        admin_page = new_observed_page(
+            admin_context,
+            console_errors,
+            page_errors,
+            handled_conflict_pages,
+        )
         admin_page.goto(f"{origin}/admin", wait_until="domcontentloaded")
         admin_page.locator("#invite-form").wait_for(state="visible")
         browser_invite_label = f"Browser smoke {room}"
@@ -225,7 +231,7 @@ def main() -> None:
         assert created_invite_response.status == 201
         admin_page.locator("#invite-output").wait_for(state="visible")
         expect(admin_page.locator("#invite-url")).to_contain_text("?invite=")
-        admin_context.close()
+        close_context(admin_context)
 
         host.evaluate(
             """room => {
@@ -238,10 +244,15 @@ def main() -> None:
         host.goto(f"{origin}/callback?error=access_denied", wait_until="domcontentloaded")
         host.wait_for_url(f"**/host?room={room}")
         host.locator("#game").wait_for(state="visible")
+        for context in (host_context, team_a_context, team_b_context):
+            close_context(context)
         browser.close()
 
-    ignored = ("favicon.ico", "net::ERR_ABORTED")
-    relevant_console = [error for error in console_errors if not any(item in error for item in ignored)]
+    relevant_console = filter_console_errors(
+        console_errors,
+        origin if access_headers else "",
+        handled_conflict_pages,
+    )
     if relevant_console or page_errors:
         raise SystemExit("Browser errors detected:\n" + "\n".join([*relevant_console, *page_errors]))
 
@@ -288,6 +299,13 @@ def authenticate_access(
     origin: str,
     access_headers: dict[str, str],
 ) -> None:
+    """Authorize exact-origin HTTP traffic without forwarding secrets on redirects.
+
+    The route intentionally remains installed until ``close_context``. Access
+    service identities do not provide a reusable browser session for subsequent
+    requests, and Playwright cannot add their headers to WebSocket handshakes.
+    The hosted test therefore exercises the application's polling fallback.
+    """
     if not access_headers:
         return
 
@@ -324,6 +342,60 @@ def authenticate_access(
         expect(page.locator("body")).to_contain_text('"ok":true', timeout=45_000)
     finally:
         page.close()
+
+
+def filter_console_errors(
+    errors: list[str],
+    access_origin: str,
+    handled_conflict_pages: list[str],
+) -> list[str]:
+    """Remove only infrastructure noise that the hosted smoke test can prove is paired."""
+    ignored = ("favicon.ico", "net::ERR_ABORTED")
+    if not access_origin:
+        return [error for error in errors if not any(item in error for item in ignored)]
+
+    websocket_origin = access_origin.replace("https://", "wss://", 1)
+    insights_by_page = Counter(
+        error.partition(": ")[0]
+        for error in errors
+        if "static.cloudflareinsights.com/beacon" in error
+    )
+    conflicts_by_page = Counter(handled_conflict_pages)
+    ignored_inline_by_page: Counter[str] = Counter()
+    ignored_conflicts_by_page: Counter[str] = Counter()
+    relevant: list[str] = []
+    for error in errors:
+        if any(item in error for item in ignored):
+            continue
+        page_url, _, message = error.partition(": ")
+        if "static.cloudflareinsights.com/beacon" in message:
+            continue
+        if (
+            "Executing inline script violates the following Content Security Policy" in message
+            and ignored_inline_by_page[page_url] < insights_by_page[page_url]
+        ):
+            ignored_inline_by_page[page_url] += 1
+            continue
+        if (
+            f"WebSocket connection to '{websocket_origin}/ws/rooms/" in message
+            and "WebSocket handshake: Unexpected response code: 302" in message
+        ):
+            continue
+        if (
+            message == "Failed to load resource: the server responded with a status of 409 (Conflict)"
+            and ignored_conflicts_by_page[page_url] < conflicts_by_page[page_url]
+        ):
+            ignored_conflicts_by_page[page_url] += 1
+            continue
+        relevant.append(error)
+    return relevant
+
+
+def close_context(context: BrowserContext) -> None:
+    context.unroute_all(behavior="wait")
+    for page in context.pages:
+        page.close()
+    context.close()
 
 
 def cleanup_test_state(
@@ -364,6 +436,7 @@ def new_observed_page(
     context: BrowserContext,
     console_errors: list[str],
     page_errors: list[str],
+    handled_conflict_pages: list[str],
 ) -> Page:
     page = context.new_page()
 
@@ -373,6 +446,17 @@ def new_observed_page(
 
     page.on("console", capture)
     page.on("pageerror", lambda error: page_errors.append(f"{page.url}: {error}"))
+    page.on(
+        "response",
+        lambda response: handled_conflict_pages.append(page.url)
+        if (
+            response.status == 409
+            and response.request.method == "POST"
+            and urlparse(response.url).path.startswith("/api/rooms/")
+            and urlparse(response.url).path.endswith("/actions")
+        )
+        else None,
+    )
     return page
 
 

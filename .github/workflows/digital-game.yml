@@ -5,6 +5,7 @@ on:
     paths:
       - "digital_game/**"
       - "scripts/test_three_phone_lab.py"
+      - "scripts/test_staging_api.py"
       - "tests/**"
       - "voice_lab/**"
       - "requirements-dev.txt"
@@ -15,6 +16,7 @@ on:
     paths:
       - "digital_game/**"
       - "scripts/test_three_phone_lab.py"
+      - "scripts/test_staging_api.py"
       - "tests/**"
       - "voice_lab/**"
       - "requirements-dev.txt"
@@ -114,7 +116,7 @@ jobs:
           workingDirectory: digital_game
           command: deploy --env staging
 
-  staging-smoke:
+  staging-api-smoke:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: deploy-staging
     runs-on: ubuntu-latest
@@ -124,20 +126,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: pip
-      - run: pip install -r requirements-dev.txt
-      - run: python -m playwright install --with-deps chromium
-      - name: Exercise deployed staging game
+      - name: Verify deployed staging API
         env:
           NOOT4NOOT_ACCESS_CLIENT_ID: ${{ secrets.NOOT4NOOT_ACCESS_CLIENT_ID }}
           NOOT4NOOT_ACCESS_CLIENT_SECRET: ${{ secrets.NOOT4NOOT_ACCESS_CLIENT_SECRET }}
         run: >-
-          python scripts/test_three_phone_lab.py
+          python scripts/test_staging_api.py
           --url https://staging.noot4noot.bestermedia.me
-          --screenshot /tmp/noot4noot-staging-smoke.png
-      - if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: staging-three-phone-smoke
-          path: /tmp/noot4noot-staging-smoke*.png
-          if-no-files-found: ignore

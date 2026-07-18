@@ -93,7 +93,10 @@ The first staging deployment was completed on 2026-07-18. The account-level
 Workers namespace is `neelsbester.workers.dev`, but `workers_dev` and preview
 URLs are disabled for this game; use the Access-protected custom domain above.
 After deployment, CI authenticates with one exact staging-only Access service
-token and runs the same three-phone browser flow against the hosted Worker.
+token and verifies invite creation, persistence, and cleanup against the
+hosted Worker. Cloudflare Bot Fight Mode challenges GitHub-hosted browser
+runners, so the full protected three-phone browser flow runs from the
+development VM with `scripts/test_three_phone_lab.py --url` after deployment.
 The Worker rejects that automation identity in production. Its credentials are
 stored only as `NOOT4NOOT_ACCESS_CLIENT_ID` and
 `NOOT4NOOT_ACCESS_CLIENT_SECRET` in the GitHub `staging` environment. The
