@@ -9,7 +9,7 @@ from pathlib import Path
 import sys
 from urllib.parse import urlparse
 
-from playwright.sync_api import APIRequestContext, BrowserContext, ConsoleMessage, Page, Route, expect, sync_playwright
+from playwright.sync_api import APIRequestContext, Browser, BrowserContext, ConsoleMessage, Page, Route, expect, sync_playwright
 
 
 SPOTIFY_SDK_STUB = """
@@ -26,6 +26,12 @@ class MockSpotifyPlayer {
 window.Spotify = { Player: MockSpotifyPlayer };
 window.onSpotifyWebPlaybackSDKReady?.();
 """
+
+CHROME_USER_AGENT = (
+    "Mozilla/5.0 (X11; Linux x86_64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/149.0.0.0 Safari/537.36"
+)
 
 
 def main() -> None:
@@ -68,9 +74,9 @@ def main() -> None:
         invite_url = invite_payload["url"]
         resources["invite_ids"] = [invite_payload["invite"]["id"]]
 
-        host_context = browser.new_context(viewport={"width": 390, "height": 844})
-        team_a_context = browser.new_context(viewport={"width": 390, "height": 844})
-        team_b_context = browser.new_context(viewport={"width": 390, "height": 844})
+        host_context = new_phone_context(browser)
+        team_a_context = new_phone_context(browser)
+        team_b_context = new_phone_context(browser)
         for context in (host_context, team_a_context, team_b_context):
             authenticate_access(context, origin, access_headers)
         host_context.add_init_script("""
@@ -240,6 +246,13 @@ def main() -> None:
         f"reveals={first_reveal!r}/{second_reveal!r} admin=invite_created"
     )
     print(f"Screenshot: {args.screenshot}")
+
+
+def new_phone_context(browser: Browser) -> BrowserContext:
+    return browser.new_context(
+        viewport={"width": 390, "height": 844},
+        user_agent=CHROME_USER_AGENT,
+    )
 
 
 def install_spotify_mocks(
