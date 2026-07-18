@@ -400,6 +400,9 @@ function removeTeam(
   if (state.teams.length < 2 && state.status === "playing") {
     finish(state, state.teams[0]?.id ?? null, "last_team");
   } else if (state.status === "playing" && round) {
+    if (!removedActive && index < state.activeTeamIndex) {
+      state.activeTeamIndex -= 1;
+    }
     state.activeTeamIndex = Math.min(state.activeTeamIndex, state.teams.length - 1);
     if (removedActive) {
       state.discardedSongIds.push(round.songId);

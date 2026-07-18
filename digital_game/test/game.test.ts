@@ -270,6 +270,32 @@ describe("placement, contest, and reveal", () => {
 });
 
 describe("roster, finish, and rematch", () => {
+  it("preserves turn order when a team before the active team is removed", () => {
+    const state = lobby();
+    addTeam(state, { id: "charlie", name: "Charlie", tokenHash: "c", joinedAt: NOW }, NOW);
+    for (const id of ["alpha", "bravo", "charlie"]) {
+      applyGameAction(state, { type: "set_ready", teamId: id, ready: true }, songs, actor({ role: "team", teamId: id }));
+    }
+    applyGameAction(state, { type: "start_game" }, songs, actor({ role: "host" }));
+    startPlacement(state);
+    lockActivePlacement(state);
+    for (const id of ["bravo", "charlie"]) {
+      applyGameAction(state, { type: "pass_challenge", teamId: id }, songs, actor({ role: "team", teamId: id }));
+    }
+    applyGameAction(state, { type: "next_round" }, songs, actor({ role: "host" }));
+    expect(state.currentRound?.activeTeamId).toBe("bravo");
+
+    applyGameAction(state, { type: "remove_team", teamId: "alpha" }, songs, actor({ role: "host" }));
+    expect(state.currentRound?.activeTeamId).toBe("bravo");
+    expect(state.activeTeamIndex).toBe(0);
+
+    startPlacement(state);
+    lockActivePlacement(state);
+    applyGameAction(state, { type: "pass_challenge", teamId: "charlie" }, songs, actor({ role: "team", teamId: "charlie" }));
+    applyGameAction(state, { type: "next_round" }, songs, actor({ role: "host" }));
+    expect(state.currentRound?.activeTeamId).toBe("charlie");
+  });
+
   it("discards the song and advances when the active team is removed", () => {
     const state = lobby();
     addTeam(state, { id: "charlie", name: "Charlie", tokenHash: "c", joinedAt: NOW }, NOW);
