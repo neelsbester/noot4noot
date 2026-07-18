@@ -42,6 +42,7 @@ output/*_report.txt
 # Data files
 *.csv
 !songs.csv.example
+!digital_game/decks/*.csv
 
 # Cache
 .cache

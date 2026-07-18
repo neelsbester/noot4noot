@@ -1,0 +1,105 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "noot4noot-game",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-18",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "assets": {
+    "binding": "ASSETS",
+    "directory": "./web",
+    "html_handling": "none",
+    "not_found_handling": "none",
+    "run_worker_first": true
+  },
+  "rules": [
+    {
+      "type": "Text",
+      "globs": ["**/*.csv"],
+      "fallthrough": true
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      { "name": "DIRECTORY", "class_name": "DirectoryDurableObject" },
+      { "name": "ROOMS", "class_name": "RoomDurableObject" }
+    ]
+  },
+  "exports": {
+    "DirectoryDurableObject": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    },
+    "RoomDurableObject": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    }
+  },
+  "vars": {
+    "ADMIN_EMAIL": "neelsbester1993@gmail.com",
+    "ENVIRONMENT": "development",
+    "SPOTIFY_CLIENT_ID": ""
+  },
+  "observability": {
+    "enabled": true,
+    "logs": { "head_sampling_rate": 1 },
+    "traces": { "enabled": true, "head_sampling_rate": 0.05 }
+  },
+  "env": {
+    "local": {
+      "name": "noot4noot-game-local",
+      "durable_objects": {
+        "bindings": [
+          { "name": "DIRECTORY", "class_name": "DirectoryDurableObject" },
+          { "name": "ROOMS", "class_name": "RoomDurableObject" }
+        ]
+      },
+      "vars": {
+        "ADMIN_EMAIL": "neelsbester1993@gmail.com",
+        "ENVIRONMENT": "local",
+        "SPOTIFY_CLIENT_ID": ""
+      }
+    },
+    "staging": {
+      "name": "noot4noot-game-staging",
+      "durable_objects": {
+        "bindings": [
+          { "name": "DIRECTORY", "class_name": "DirectoryDurableObject" },
+          { "name": "ROOMS", "class_name": "RoomDurableObject" }
+        ]
+      },
+      "routes": [
+        {
+          "pattern": "staging.noot4noot.bestermedia.me",
+          "custom_domain": true
+        }
+      ],
+      "vars": {
+        "ADMIN_EMAIL": "neelsbester1993@gmail.com",
+        "ENVIRONMENT": "staging",
+        "SPOTIFY_CLIENT_ID": "d924c985a04941a1bfc8ffd87fa2e335"
+      }
+    },
+    "production": {
+      "name": "noot4noot-game-production",
+      "durable_objects": {
+        "bindings": [
+          { "name": "DIRECTORY", "class_name": "DirectoryDurableObject" },
+          { "name": "ROOMS", "class_name": "RoomDurableObject" }
+        ]
+      },
+      "routes": [
+        {
+          "pattern": "noot4noot.bestermedia.me",
+          "custom_domain": true
+        }
+      ],
+      "vars": {
+        "ADMIN_EMAIL": "neelsbester1993@gmail.com",
+        "ENVIRONMENT": "production",
+        "SPOTIFY_CLIENT_ID": "d924c985a04941a1bfc8ffd87fa2e335"
+      }
+    }
+  }
+}
