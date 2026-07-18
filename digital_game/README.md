@@ -1,5 +1,10 @@
 # Noot4Noot Digital Game
 
+The production rewrite is in progress on the `feature/cloudflare-multiplayer`
+branch. [PRODUCT_SPEC.md](PRODUCT_SPEC.md) is the agreed product contract and
+[ARCHITECTURE.md](ARCHITECTURE.md) describes the Cloudflare Worker and Durable
+Object target.
+
 Standalone local multiplayer mode for Noot4Noot. One browser starts as the host table and each team joins from its own phone or tablet. A team can temporarily switch to scoped host controls after entering the host's one-time control code, so hosting duties can move around the room without exposing the original host token. The game uses digital song cards, server-authoritative timelines, Spotify playback, challenges, passes, and host-managed tokens.
 
 This directory is the July 2026 development checkpoint. See [ARCHITECTURE.md](ARCHITECTURE.md) for the state model, API, visibility rules, and implementation notes.

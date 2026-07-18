@@ -1,175 +1,153 @@
 # Digital Game Architecture
 
-## Component map
+## Production component map
 
 ```text
-digital_game/
-  server.py                  Dependency-free threaded HTTP/JSON server
-  service.py                 Authoritative rooms, teams, rounds, rules, and serialization
-  web/
-    index.html               Join/create-room entry screen
-    landing.js               Room creation and team joining
-    host.html / host.js      Host table, Spotify, reveal, tokens, round control
-    team.html / team.js      Team placement, challenge, pass, reveal, drag interaction
-    shared.js                API helpers, session storage, timeline rendering and animation
-    spotify.js               Spotify PKCE, token refresh, Connect API requests
-    spotify-browser-player.js Web Playback SDK adapter for audio in the host browser
-    test-lab.html / .js      Local host-plus-two-team QA harness with isolated seats
-    game.css                 Shared mobile-first portrait and responsive tablet/host UI
-tests/
-  test_digital_game.py       Rule, visibility, HTTP, challenge, pass, and reveal coverage
-mockups/digital-game/        Earlier interactive design reference
+Browser
+  ├─ Workers Static Assets
+  ├─ JSON API
+  ├─ WebSocket revision stream
+  └─ Spotify OAuth PKCE + Connect/Web Playback (host browser only)
+          │
+Cloudflare Worker router
+  ├─ invitation/session gate
+  ├─ security headers and bounded request validation
+  ├─ Directory Durable Object (single low-volume administration atom)
+  └─ Room Durable Object per room (independent game coordination atom)
 ```
 
-The server intentionally uses only the Python standard library. The browser implementation is dependency-free JavaScript apart from Spotify's hosted Web Playback SDK.
+The Python service in `service.py` and local server in `server.py` remain a
+reference checkpoint during the Cloudflare migration. The deployed authority
+is the TypeScript Worker under `src/`.
 
-## Runtime model
+## Durable Object boundaries
 
-`GameService` owns all mutable game state. `GameHTTPServer` exposes it through a small JSON API and serves the static web application.
+### Directory
 
-State mutations run under a re-entrant lock. Every successful action increments the room `revision`. Host and team pages poll state roughly every 700ms and rerender only when the revision changes.
+The directory is deliberately limited to low-volume global metadata:
 
-Every mutation is atomically written to `digital_game/.data/rooms.json` by the CLI server and restored at startup. The path is configurable with `--state-file`; direct `GameService` and `build_server` use remains isolated unless a path is supplied. Browser role tokens survive refresh and remain valid after server recovery. Restarting a separately launched Cloudflare tunnel is what changes the temporary public hostname.
+- hashed invite tokens, lifetime, redemption count, cap, and revocation;
+- hashed anonymous access sessions and expiry;
+- room code allocation and room summary/index records;
+- owner-only listing, invite creation/revocation, and forced room closure.
 
-The optional `seat` query parameter namespaces browser session keys. The local test lab uses it to run one host and two independent team identities in same-origin iframes without overwriting each other's tokens.
-
-## Domain model
+It does not process gameplay or fan out live room messages. At the expected
+private-use scale this keeps administration simple without putting a global
+object on the gameplay request path after room resolution.
 
 ### Room
 
-- Four-character code.
-- Opaque host token.
-- Ordered team collection.
-- Shuffled deck and used-song set.
-- Active-team index, status, target score, token configuration, and revision.
-- Four-digit host control code, authorized cohost team IDs, and terminal winner/reason.
-- Current round.
+Each room has its own `RoomDurableObject`, addressed deterministically by an
+opaque room identifier. It owns:
 
-### Team
+- settings, status, roster, readiness, and team order;
+- hashed host/team bearer tokens;
+- shuffled deck and discarded/used songs;
+- timelines, token balances, active team, and turn purchase state;
+- current round, placements, challenge decisions, timer, and result;
+- revision number and connected WebSockets;
+- 24-hour expiry alarm.
 
-- Opaque ID and session token.
-- Display name.
-- Token balance.
-- Sorted timeline of song IDs.
+SQLite is the source of truth. Mutations are synchronous SQLite transactions
+inside the object; in-memory values are caches only.
 
-### Round
+## Request model
 
-- Round number, hidden song ID, and active team.
-- Active placement and optional challenger placement.
-- Set of teams that passed the challenge window.
-- Pre-reveal timeline snapshot and canonical correct placement.
-- Outcome and winning team after reveal.
+The Worker:
 
-## Round state machine
+1. validates origin, content type, body size, route parameters, and access
+   session;
+2. resolves a room through the directory;
+3. calls typed Durable Object RPC methods;
+4. returns role-scoped JSON or upgrades the request to the room WebSocket.
+
+Browser clients send an idempotency key with each mutation. The room stores a
+bounded result cache so retries caused by mobile reconnects cannot spend tokens
+or advance phases twice.
+
+## Realtime model
+
+WebSockets carry only revision notifications and safe event labels. After a
+notification, clients fetch or receive a full role-scoped snapshot. This keeps
+reconnect and secrecy behavior straightforward:
+
+- hibernating sockets reduce idle cost;
+- socket attachments identify only the authenticated role/session;
+- the room broadcasts after persistence succeeds;
+- 700ms polling remains a fallback when WebSockets are unavailable;
+- stale clients submit the last observed revision and receive a conflict when
+  an action is no longer valid.
+
+## Game state machine
 
 ```text
 lobby
-  -> placement
-  -> challenge
-       -> reveal_ready                 all rivals pass or host closes
-       -> challenge placement
-            -> reveal_ready            challenger locks
-  -> revealed                          host or active team reveals
-  -> placement                         host starts next round
-  -> finished                          target reached or deck exhausted
+  └─ all teams ready + host start
+      └─ turn_start
+          ├─ optional one-time random-card purchase
+          └─ host marks playback started
+              ├─ active team replaces song → turn_start/playback cycle
+              └─ placement
+                  └─ active placement locked
+                      └─ challenge
+                          ├─ all rivals pass → automatic reveal
+                          ├─ first contest + locked answer → automatic reveal
+                          ├─ timer alarm → reveal
+                          └─ host force reveal → reveal
+                              ├─ target reached → finished
+                              └─ host next round → turn_start
 ```
 
-Only the active team can place and lock the initial card. A rival can either claim the challenge or pass. Passing is irreversible for that round. A claimed challenge immediately locks out all other rivals.
+Starting the next round is a distinct host action so the playback browser can
+pause the previous track before advancing. Server state never assumes a
+Spotify command succeeded; playback status is a room hint used to enforce the
+buy/replace windows.
 
-The host can close an unclaimed challenge window manually. This remains useful when a team device disconnects before passing.
+## Visibility and authority
 
-## Placement and reveal calculation
+- The full curated deck exists in Worker code but current hidden song metadata
+  remains inside the room object.
+- Before reveal, normal teams receive only a mystery marker.
+- Host controllers receive the Spotify URI needed for playback but no title,
+  artist, or year.
+- Active placement is private until locked.
+- A contest placement is private to the challenger and host controllers until
+  locked.
+- Full metadata appears only after the reveal mutation commits.
+- All permissions are calculated server-side and serialized as `can` flags for
+  presentation only; clients cannot grant themselves capabilities.
+- User-controlled names are rendered through DOM text APIs, not HTML strings.
 
-Timeline placement is server-authoritative. A slot is valid when the mystery year lies between the years on its left and right. Equal-year boundaries are accepted.
+## Persistence and expiry
 
-At reveal time the service:
+- Room mutations update state and `last_activity_at` atomically.
+- A room alarm is always scheduled at the earliest of challenge deadline and
+  24-hour inactivity expiry.
+- Challenge alarms resolve idempotently and then reschedule room expiry.
+- Expired rooms become terminal before their data is deleted; the directory
+  drops their public code mapping.
+- Results are retained for at most 24 hours.
 
-1. Copies the active timeline into `reveal_timeline_song_ids`.
-2. Evaluates the active placement and optional challenge placement.
-3. Stores the winning placement when either answer is correct.
-4. Otherwise calculates a canonical correct slot using `(year, casefolded title)`, matching permanent timeline sorting.
-5. Awards the card according to the outcome.
-6. Serializes the pre-reveal snapshot plus `correct_placement` for the explanation animation.
+## Environments
 
-The client uses those fields to pulse a correct card in place or animate an incorrect card from the locked slot to the correct slot. The actual updated timeline appears when the next round starts.
+`wrangler.jsonc` defines isolated staging and production Worker names and
+Durable Object namespaces.
 
-## Challenge and token rules
+- Staging route: `staging.noot4noot.bestermedia.me`
+- Production route: `noot4noot.bestermedia.me`
+- Staging is fully protected by Cloudflare Access.
+- Production `/admin*` is protected by Cloudflare Access.
+- Environment-specific Spotify client IDs are non-secret variables.
+- Deployment credentials exist only as GitHub Actions secrets.
 
-- Claiming a challenge costs one token immediately.
-- A team that passed cannot later challenge that round.
-- Every non-active team must pass before an unclaimed window closes automatically.
-- A successful challenger receives the card; the card is not removed from the active team because it had not yet been awarded.
-- Host token adjustments are limited to `+1` and `-1`, clamped to `0..5`.
-- Buying a random card costs three tokens and inserts a newly drawn song in sorted order.
-- Reaching the target through either a reveal or a random-card purchase records the room winner and gates every subsequent action.
+## Verification
 
-## API surface
-
-### Public and session endpoints
-
-```text
-GET  /api/health
-GET  /api/config
-POST /api/rooms
-POST /api/rooms/{code}/teams
-GET  /api/rooms/{code}/state
-POST /api/rooms/{code}/actions
-```
-
-Authenticated requests use `Authorization: Bearer <session-token>`.
-
-### Actions
-
-```text
-start_game
-place
-lock_placement
-claim_challenge
-pass_challenge
-place_challenge
-lock_challenge
-close_challenge
-skip_song
-reveal
-next_round
-adjust_tokens
-buy_random_card
-authorize_cohost
-```
-
-Each handler validates the caller role, round phase, and rule-specific preconditions before mutating state.
-
-## Information visibility
-
-- Before reveal, team clients receive only `{ "id": "mystery" }` for the current song.
-- The host receives the Spotify URI and URL so it can start playback, but not the title, artist, or year.
-- Active placement is hidden from other teams during the placement phase.
-- Challenge placement is hidden from non-host, non-challenger clients until answers are locked.
-- Full song metadata is serialized only after reveal.
-
-Team sessions cannot request cohost mode until `authorize_cohost` succeeds with the room's four-digit control code. The original host sees that code; normal team state does not expose it. Authorization is persisted for that team session.
-
-This is game secrecy and a practical trusted-room boundary, not hardened internet identity. A future public deployment should add account identities, stronger session lifecycle controls, rate limiting, code-attempt throttling, and production headers.
-
-## Spotify path
-
-`spotify.js` implements Authorization Code with PKCE and refreshes tokens in browser storage. The authorization and token requests use the exact same callback URI.
-
-For local HTTP, the callback is normalized to `http://127.0.0.1:<port>/callback`. HTTPS hosts use their current origin.
-
-The host can target an external Spotify Connect device or initialize `spotify-browser-player.js`, which registers the browser as a Connect device. Before playing in the browser, the Play button calls `activateElement()` to satisfy mobile Safari's user-gesture requirement. Playback is transferred to the selected device before the mystery track is started.
-
-## Continuing development
-
-Recommended first checks in a new session:
-
-1. Read `digital_game/README.md` and this file.
-2. Run `git status --short` because the wider repository may contain unrelated work.
-3. Run the focused digital tests.
-4. Start the Python server and Cloudflare tunnel as separate processes when backend reloads are expected.
-5. Register the tunnel's exact `/callback` URI before testing Spotify on iPad.
-6. Use disposable rooms for rule and animation work, and delete `digital_game/.data/rooms.json` when a clean local slate is required.
-
-For fast UI regression checks, open `/test-lab`, create a three-phone room, and use **Quick start**. The lab is only linked from loopback origins and is development tooling, not a production administration surface.
-
-Keep rule changes in `service.py` first, expose only the minimum new serialized state, then implement the corresponding host/team presentation. Add a service-level test for every new action or phase transition.
+- Pure rule tests cover every action and phase transition.
+- Workers-runtime integration tests exercise bindings, SQLite persistence,
+  alarms, authorization, idempotency, and serialization secrecy.
+- Browser unit tests cover session storage, timelines, reveal helpers, and
+  Spotify error handling.
+- Playwright drives host plus two isolated phone contexts through lobby,
+  purchase/play/replace, placement, contest/pass, reveal, next round, removal,
+  finish, and rematch flows.
+- Responsive screenshots cover 390×844 phones and wider tablet/desktop views.
