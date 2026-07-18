@@ -86,9 +86,10 @@ def main() -> None:
         host.locator("#lobby-teams .team-row").first.wait_for(state="visible")
 
         team_a.locator("#ready").click()
+        expect(team_a.locator("#ready")).to_have_text("Not ready yet")
         team_b.locator("#ready").click()
-        host.locator("#start-game").wait_for(state="visible")
-        host.locator("#start-game").wait_for(state="attached")
+        expect(host.locator("#lobby-teams .ready")).to_have_count(2)
+        expect(host.locator("#lobby-teams .ready")).to_have_text(["READY", "READY"])
         expect(host.locator("#start-game")).to_be_enabled()
         host.locator("#start-game").click()
 

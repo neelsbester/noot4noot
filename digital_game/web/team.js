@@ -38,6 +38,15 @@ async function act(action) {
     return true;
   } catch (error) {
     await refresh();
+    if (error.code === "stale_state" && state) {
+      try {
+        acceptSnapshot(await performAction(room, state, action));
+        return true;
+      } catch (retryError) {
+        toast(retryError.message);
+        return false;
+      }
+    }
     toast(error.message);
     return false;
   }

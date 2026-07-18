@@ -58,6 +58,16 @@ async function act(action) {
     return true;
   } catch (error) {
     await refresh();
+    if (error.code === "stale_state" && state) {
+      try {
+        const next = await performAction(room, state, action, controllerMode);
+        await acceptSnapshot(next);
+        return true;
+      } catch (retryError) {
+        toast(retryError.message);
+        return false;
+      }
+    }
     toast(error.message);
     return false;
   }
