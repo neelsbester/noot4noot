@@ -38,7 +38,7 @@ async function act(action) {
     return true;
   } catch (error) {
     await refresh();
-    if (error.code === "stale_state" && state) {
+    if (error.code === "stale_state" && action.type === "set_ready" && state) {
       try {
         acceptSnapshot(await performAction(room, state, action));
         return true;

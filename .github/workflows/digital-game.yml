@@ -99,9 +99,17 @@ jobs:
     environment: staging
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: digital_game/package-lock.json
+      - run: npm ci
+        working-directory: digital_game
       - uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           wranglerVersion: "4.112.0"
-          command: deploy --config digital_game/wrangler.jsonc --env staging
+          workingDirectory: digital_game
+          command: deploy --env staging
