@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "digital_game/**"
+      - "scripts/test_lab_interface.py"
       - "scripts/test_three_phone_lab.py"
       - "scripts/test_staging_api.py"
       - "tests/**"
@@ -15,6 +16,7 @@ on:
     branches: [main]
     paths:
       - "digital_game/**"
+      - "scripts/test_lab_interface.py"
       - "scripts/test_three_phone_lab.py"
       - "scripts/test_staging_api.py"
       - "tests/**"
@@ -85,13 +87,16 @@ jobs:
           cat /tmp/noot4noot-worker.log
           exit 1
       - run: python ../scripts/test_three_phone_lab.py
+      - run: python ../scripts/test_lab_interface.py
       - if: failure()
         run: cat /tmp/noot4noot-worker.log
       - if: always()
         uses: actions/upload-artifact@v4
         with:
           name: three-phone-smoke
-          path: /tmp/noot4noot-three-phone-smoke*.png
+          path: |
+            /tmp/noot4noot-three-phone-smoke*.png
+            /tmp/noot4noot-test-lab.png
           if-no-files-found: ignore
 
   deploy-staging:

@@ -6,6 +6,20 @@ export function controllerModeFromUrl() {
   return new URLSearchParams(window.location.search).get("mode") === "controller";
 }
 
+export function seatFromUrl() {
+  return new URLSearchParams(window.location.search).get("seat") || "";
+}
+
+export function roomRoleUrl(role, room, { mode = "", simulation = false } = {}) {
+  const url = new URL(`/${role}`, window.location.origin);
+  url.searchParams.set("room", room);
+  const seat = seatFromUrl();
+  if (seat) url.searchParams.set("seat", seat);
+  if (mode) url.searchParams.set("mode", mode);
+  if (simulation) url.searchParams.set("lab", "1");
+  return `${url.pathname}${url.search}`;
+}
+
 export function randomToken(byteLength = 32) {
   const bytes = new Uint8Array(byteLength);
   crypto.getRandomValues(bytes);
@@ -19,7 +33,7 @@ export function requestId() {
 }
 
 export async function api(path, { method = "GET", body } = {}) {
-  const response = await fetch(path, {
+  const response = await fetch(withCurrentSeat(path), {
     method,
     credentials: "same-origin",
     headers: body ? { "Content-Type": "application/json" } : {},
@@ -63,8 +77,11 @@ export function createRoomUpdates(room, { controllerMode = false, onRevision, on
   const connect = () => {
     if (stopped) return;
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const mode = controllerMode ? "?mode=controller" : "";
-    socket = new WebSocket(`${protocol}//${window.location.host}/ws/rooms/${encodeURIComponent(room)}${mode}`);
+    const socketUrl = new URL(`${protocol}//${window.location.host}/ws/rooms/${encodeURIComponent(room)}`);
+    if (controllerMode) socketUrl.searchParams.set("mode", "controller");
+    const seat = seatFromUrl();
+    if (seat) socketUrl.searchParams.set("seat", seat);
+    socket = new WebSocket(socketUrl);
     socket.addEventListener("open", () => {
       onStatus?.("live");
       if (fallbackTimer !== null) {
@@ -99,6 +116,15 @@ export function createRoomUpdates(room, { controllerMode = false, onRevision, on
     if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
     if (fallbackTimer !== null) window.clearInterval(fallbackTimer);
   };
+}
+
+function withCurrentSeat(path) {
+  const seat = seatFromUrl();
+  if (!seat) return path;
+  const url = new URL(path, window.location.origin);
+  if (url.origin !== window.location.origin) return path;
+  url.searchParams.set("seat", seat);
+  return `${url.pathname}${url.search}${url.hash}`;
 }
 
 export function decadeClass(year) {

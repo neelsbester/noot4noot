@@ -8,7 +8,9 @@ import {
   performAction,
   renderTimeline,
   revealPlacement,
+  roomRoleUrl,
   roomFromUrl,
+  seatFromUrl,
   teamById,
 } from "./shared.js";
 import {
@@ -31,12 +33,15 @@ const elements = Object.fromEntries(
 const toast = createToast(elements.toast);
 let room = roomFromUrl();
 const controllerMode = controllerModeFromUrl();
+const labModeRequested = new URLSearchParams(window.location.search).get("lab") === "1"
+  && seatFromUrl() === "lab-host";
 let state = null;
 let stopUpdates = null;
 let timerHandle = null;
 let spotifyPlayer = null;
 let browserDeviceId = "";
 let spotifyConnected = false;
+let labPlayback = false;
 let playbackBusy = false;
 let highestSeenRevision = -1;
 
@@ -170,6 +175,11 @@ function renderGame() {
   elements["play-song"].textContent = round.playbackStarted ? "Play again" : "Play this song";
   elements["pause-song"].disabled = playbackBusy || !spotifyConnected || !currentDevice();
   elements["spotify-fallback"].hidden = !playbackOwner || !("spotifyUrl" in round.song) || !round.song.spotifyUrl;
+  if (labPlayback) {
+    elements["spotify-refresh"].hidden = true;
+    elements["pause-song"].hidden = true;
+    elements["spotify-fallback"].hidden = true;
+  }
   if (!elements["spotify-fallback"].hidden) elements["spotify-fallback"].href = round.song.spotifyUrl;
   updateTimer();
 }
@@ -206,7 +216,7 @@ function render() {
 }
 
 async function pauseForStateTransition(next) {
-  if (!state?.viewer.playbackOwner || !spotifyConnected || !currentDevice()) return;
+  if (labPlayback || !state?.viewer.playbackOwner || !spotifyConnected || !currentDevice()) return;
   const oldRound = state.round;
   const newRound = next.round;
   const changed = oldRound && (
@@ -284,10 +294,25 @@ async function loadDevices() {
 async function initializeSpotify() {
   if (!state?.viewer.playbackOwner) return;
   try {
-    await configureSpotify();
+    const config = await configureSpotify();
+    if (labModeRequested && ["local", "staging"].includes(config.environment)) {
+      labPlayback = true;
+      browserDeviceId = "test-lab-silent-player";
+      spotifyConnected = true;
+      elements["spotify-device"].replaceChildren(new Option("Silent test player · Simulation", browserDeviceId));
+      elements["spotify-device"].value = browserDeviceId;
+      elements["spotify-device"].disabled = true;
+      elements["spotify-device-row"].hidden = false;
+      elements["spotify-connect"].textContent = "Simulation ready";
+      elements["spotify-connect"].disabled = true;
+      elements["spotify-disconnect"].hidden = true;
+      render();
+      return;
+    }
     await handleSpotifyCallback();
     const token = await getSpotifyToken();
     if (!token) return;
+    loadSpotifySDK();
     spotifyPlayer = await createBrowserSpotifyPlayer({
       getToken: getSpotifyToken,
       onError: (message) => toast(message),
@@ -307,6 +332,13 @@ async function initializeSpotify() {
   }
 }
 
+function loadSpotifySDK() {
+  if (document.querySelector('script[src="https://sdk.scdn.co/spotify-player.js"]')) return;
+  const script = document.createElement("script");
+  script.src = "https://sdk.scdn.co/spotify-player.js";
+  document.head.append(script);
+}
+
 elements["copy-join"].addEventListener("click", async () => {
   await copyText(elements["join-url"].textContent);
   toast("Room address copied.");
@@ -316,7 +348,7 @@ elements["force-reveal"].addEventListener("click", () => void act({ type: "force
 elements["award-bonus"].addEventListener("click", () => void act({ type: "award_title_artist_bonus" }));
 elements["next-round"].addEventListener("click", () => void act({ type: "next_round" }));
 elements.rematch.addEventListener("click", () => void act({ type: "rematch" }));
-elements["back-to-team"].addEventListener("click", () => window.location.assign(`/team?room=${encodeURIComponent(room)}`));
+elements["back-to-team"].addEventListener("click", () => window.location.assign(roomRoleUrl("team", room)));
 elements["spotify-connect"].addEventListener("click", () => void beginSpotifyLogin(room));
 elements["spotify-refresh"].addEventListener("click", async () => {
   try {
@@ -346,7 +378,7 @@ elements["play-song"].addEventListener("click", async () => {
   render();
   try {
     await spotifyPlayer?.activate();
-    await playSpotifyTrack(state.round.song.spotifyUri, currentDevice());
+    if (!labPlayback) await playSpotifyTrack(state.round.song.spotifyUri, currentDevice());
     if (!state.round.playbackStarted) {
       const started = await act({ type: "mark_playback_started" });
       if (!started && state?.can.markPlaybackStarted) {
@@ -364,7 +396,7 @@ elements["pause-song"].addEventListener("click", async () => {
   playbackBusy = true;
   render();
   try {
-    await pauseSpotifyPlayback(currentDevice());
+    if (!labPlayback) await pauseSpotifyPlayback(currentDevice());
   } catch (error) {
     toast(error.message);
   } finally {

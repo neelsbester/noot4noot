@@ -205,7 +205,7 @@ export class RoomDurableObject extends DurableObject<CloudflareEnv> {
         return Response.json({ error: "Invalid WebSocket origin", code: "invalid_origin" }, { status: 403 });
       }
       const code = url.pathname.split("/").filter(Boolean).at(-1)?.toUpperCase() ?? "";
-      const token = readRoomToken(request, code);
+      const token = readRoomToken(request, code, url.searchParams.get("seat"));
       if (!token) return Response.json({ error: "Room session required", code: "invalid_session" }, { status: 401 });
       const controllerMode = url.searchParams.get("mode") === "controller";
       const tokenHash = await this.hashSessionToken(token);

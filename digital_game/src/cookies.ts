@@ -18,8 +18,8 @@ export function readAccessToken(request: Request): string | null {
   return readCookie(request, ACCESS_COOKIE);
 }
 
-export function readRoomToken(request: Request, code: string): string | null {
-  const value = readCookie(request, ROOM_COOKIE);
+export function readRoomToken(request: Request, code: string, seat: string | null = null): string | null {
+  const value = readCookie(request, roomCookieName(seat));
   if (!value) return null;
   const separator = value.indexOf(".");
   if (separator < 0 || value.slice(0, separator) !== code) return null;
@@ -30,8 +30,14 @@ export function accessCookie(token: string, expiresAt: number, secure: boolean):
   return cookie(ACCESS_COOKIE, token, expiresAt, secure);
 }
 
-export function roomCookie(code: string, token: string, expiresAt: number, secure: boolean): string {
-  return cookie(ROOM_COOKIE, `${code}.${token}`, expiresAt, secure);
+export function roomCookie(
+  code: string,
+  token: string,
+  expiresAt: number,
+  secure: boolean,
+  seat: string | null = null,
+): string {
+  return cookie(roomCookieName(seat), `${code}.${token}`, expiresAt, secure);
 }
 
 export function clearRoomCookie(secure: boolean): string {
@@ -41,4 +47,8 @@ export function clearRoomCookie(secure: boolean): string {
 function cookie(name: string, value: string, expiresAt: number, secure: boolean): string {
   const maxAge = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
   return `${name}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure ? "; Secure" : ""}`;
+}
+
+function roomCookieName(seat: string | null): string {
+  return seat ? `${ROOM_COOKIE}_${seat.replaceAll("-", "_")}` : ROOM_COOKIE;
 }

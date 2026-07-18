@@ -118,6 +118,20 @@ buy/replace windows.
   presentation only; clients cannot grant themselves capabilities.
 - User-controlled names are rendered through DOM text APIs, not HTML strings.
 
+## Three-phone test lab
+
+The owner-only staging/local lab embeds one host and two team pages in a single
+desktop window. It uses three fixed seat identifiers and three separate
+HttpOnly room cookies, so iframe sessions cannot overwrite one another. Seat
+cookies and the lab provisioning endpoint are rejected in production.
+
+Only host/team pages carrying a valid lab seat may be framed by the same
+origin; normal game pages retain `X-Frame-Options: DENY` and
+`frame-ancestors 'none'`. The lab shell itself may frame only same-origin
+content. Its silent playback adapter is enabled only for a lab host in local
+or staging, while the full-host link preserves the host seat for real Spotify
+testing.
+
 ## Persistence and expiry
 
 - Room mutations update state and `last_activity_at` atomically.
@@ -154,4 +168,6 @@ Durable Object namespaces.
 - Playwright drives host plus two isolated phone contexts through lobby,
   purchase/play/replace, placement, contest/pass, reveal, next round, delegated
   controls, and owner invite creation.
+- A separate Playwright check drives the visible one-window test lab through
+  provisioning, quick start, simulated playback, placement, pass, and reveal.
 - Responsive screenshots and hard width assertions cover 390×844 phones.

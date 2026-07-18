@@ -139,6 +139,7 @@ a {
   color: var(--green);
   background: rgb(63 101 77 / 9%);
   border-radius: 999px;
+  text-decoration: none;
 }
 
 .status-pill::before {

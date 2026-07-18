@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#e9e5dc">
+  <meta name="referrer" content="no-referrer">
+  <title>Noot4Noot — Three-phone test lab</title>
+  <link rel="stylesheet" href="/test-lab.css">
+</head>
+<body>
+  <main class="lab-shell">
+    <header class="lab-header">
+      <div class="lab-brand">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <div>
+          <span class="eyebrow">Owner test environment</span>
+          <h1>Three-phone table</h1>
+        </div>
+      </div>
+
+      <dl class="telemetry" aria-label="Test room status">
+        <div><dt>Room</dt><dd id="lab-room">—</dd></div>
+        <div><dt>Phase</dt><dd id="lab-phase">No room</dd></div>
+        <div><dt>Round</dt><dd id="lab-round">—</dd></div>
+      </dl>
+
+      <div class="lab-actions">
+        <button id="new-room" class="button primary" type="button">New test room</button>
+        <button id="quick-start" class="button" type="button" disabled>Ready both + start</button>
+        <button id="reload-frames" class="button quiet" type="button" disabled>Reload phones</button>
+      </div>
+    </header>
+
+    <section class="lab-guide">
+      <div>
+        <strong>Everything here is interactive.</strong>
+        <span>Each frame has its own secure room session and behaves like a separate 390 × 844 phone.</span>
+      </div>
+      <div class="guide-note">
+        <span class="status-dot"></span>
+        <span>Simulation covers game rules, not Spotify OAuth, devices, audio, autoplay, pause, or API failures.</span>
+      </div>
+      <a id="full-host" class="text-link" href="#" target="_blank" rel="noopener" aria-disabled="true">Open full host ↗</a>
+    </section>
+
+    <section id="device-grid" class="device-grid" aria-label="Host and two simulated phones">
+      <article class="device" data-device="host">
+        <header class="device-header">
+          <div><span class="device-status"></span><span>Host</span></div>
+          <button class="focus-device" type="button">Focus</button>
+        </header>
+        <div class="phone">
+          <span class="speaker" aria-hidden="true"></span>
+          <div class="screen">
+            <iframe id="host-frame" title="Host phone" allow="autoplay; encrypted-media"></iframe>
+            <div class="empty-state"><strong>H</strong><span>Create a room to begin</span></div>
+          </div>
+          <span class="home-indicator" aria-hidden="true"></span>
+        </div>
+      </article>
+
+      <article class="device" data-device="team-a">
+        <header class="device-header">
+          <div><span class="device-status"></span><span>Needle Crew</span></div>
+          <button class="focus-device" type="button">Focus</button>
+        </header>
+        <div class="phone">
+          <span class="speaker" aria-hidden="true"></span>
+          <div class="screen">
+            <iframe id="team-a-frame" title="Needle Crew phone"></iframe>
+            <div class="empty-state"><strong>A</strong><span>Create a room to begin</span></div>
+          </div>
+          <span class="home-indicator" aria-hidden="true"></span>
+        </div>
+      </article>
+
+      <article class="device" data-device="team-b">
+        <header class="device-header">
+          <div><span class="device-status"></span><span>Bassline Club</span></div>
+          <button class="focus-device" type="button">Focus</button>
+        </header>
+        <div class="phone">
+          <span class="speaker" aria-hidden="true"></span>
+          <div class="screen">
+            <iframe id="team-b-frame" title="Bassline Club phone"></iframe>
+            <div class="empty-state"><strong>B</strong><span>Create a room to begin</span></div>
+          </div>
+          <span class="home-indicator" aria-hidden="true"></span>
+        </div>
+      </article>
+    </section>
+
+    <footer class="lab-footer">
+      <span id="lab-status" role="status" aria-live="polite">Create a room to launch the three phones.</span>
+      <span>Test rooms expire automatically after 24 hours.</span>
+    </footer>
+  </main>
+  <script type="module" src="/test-lab.js"></script>
+</body>
+</html>

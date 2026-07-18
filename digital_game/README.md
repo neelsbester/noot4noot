@@ -44,6 +44,26 @@ readies both teams, and covers:
 
 Spotify login itself remains interactive and requires Spotify Premium.
 
+## One-window test lab
+
+Open `http://127.0.0.1:5173/test-lab` locally or
+`https://staging.noot4noot.bestermedia.me/test-lab` on staging. The lab is
+owner-only on staging and unavailable in production.
+
+`New test room` creates one host plus Needle Crew and Bassline Club with three
+separate HttpOnly seat cookies. The embedded frames are exact 390×844 browser
+viewports. `Ready both + start` is a convenience for reaching round one; every
+normal host and team control remains directly interactive inside its frame.
+The embedded host uses silent simulated playback so placement, contest, token,
+and reveal mechanics can be tested without Spotify. `Open full host` uses the
+same host seat in a normal tab for real Spotify testing.
+
+CI exercises the lab itself with:
+
+```bash
+../.venv/bin/python ../scripts/test_lab_interface.py
+```
+
 ## Commands
 
 ```bash
@@ -104,6 +124,6 @@ current token expires on 2027-07-18 and should be rotated before then.
 
 ## Legacy reference
 
-The Python `service.py`/`server.py`, legacy scanner in `player/`, card generator
-in `src/`, and old test-lab assets are retained only as references. New game
-rules belong in `src/domain/game.ts` with Worker-runtime tests.
+The Python `service.py`/`server.py`, legacy scanner in `player/`, and card
+generator in `src/` are retained only as references. New game rules belong in
+`src/domain/game.ts` with Worker-runtime tests.

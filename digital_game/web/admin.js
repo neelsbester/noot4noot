@@ -84,7 +84,11 @@ function roomCard(room) {
 
 async function refresh() {
   try {
-    const dashboard = await api("/api/admin/dashboard");
+    const [dashboard, config] = await Promise.all([
+      api("/api/admin/dashboard"),
+      api("/api/config"),
+    ]);
+    elements["test-lab-link"].hidden = !["local", "staging"].includes(config.environment);
     elements.invites.replaceChildren(...(dashboard.invites.length
       ? dashboard.invites.map(inviteCard)
       : [empty("No invites yet.")]));

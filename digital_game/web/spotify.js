@@ -77,10 +77,12 @@ export async function handleSpotifyCallback() {
   const params = new URLSearchParams(window.location.search);
   const code = params.get('code');
   const error = params.get('error');
+  const room = sessionStorage.getItem(ROOM_KEY);
+  const seat = sessionStorage.getItem(SEAT_KEY) || '';
+  const mode = sessionStorage.getItem(MODE_KEY) || '';
   if (!code && !error) return null;
   if (error) {
-    const room = sessionStorage.getItem(ROOM_KEY);
-    if (room) window.history.replaceState({}, document.title, `/host?room=${encodeURIComponent(room)}`);
+    if (room) restoreHostUrl(room, seat, mode);
     clearPendingLogin();
     throw new Error(`Spotify login failed: ${error}`);
   }
@@ -89,9 +91,6 @@ export async function handleSpotifyCallback() {
   const state = params.get('state');
   const expectedState = sessionStorage.getItem(STATE_KEY);
   const verifier = sessionStorage.getItem(VERIFIER_KEY);
-  const room = sessionStorage.getItem(ROOM_KEY);
-  const seat = sessionStorage.getItem(SEAT_KEY) || '';
-  const mode = sessionStorage.getItem(MODE_KEY) || '';
   if (!state || state !== expectedState || !verifier || !room) {
     if (room) {
       restoreHostUrl(room, seat, mode);

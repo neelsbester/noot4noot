@@ -6,6 +6,7 @@ import {
   performAction,
   renderTimeline,
   revealPlacement,
+  roomRoleUrl,
   roomFromUrl,
   teamById,
 } from "./shared.js";
@@ -78,7 +79,7 @@ function renderLobby() {
   elements["lobby-teams"].replaceChildren(...state.teams.map(teamRow));
   elements.ready.textContent = team?.ready ? "Not ready yet" : "I’m ready";
   elements.ready.classList.toggle("primary", !team?.ready);
-  elements["lobby-host-controls"].href = `/host?room=${encodeURIComponent(room)}&mode=controller`;
+  elements["lobby-host-controls"].href = roomRoleUrl("host", room, { mode: "controller" });
 }
 
 function turnCopy(round, active, challenger) {
@@ -124,7 +125,7 @@ function renderGame() {
   elements["card-count"].textContent = String(team?.cardCount ?? 0);
   elements["token-count"].textContent = String(team?.tokens ?? 0);
   elements["timeline-title"].textContent = `${active?.name || "Active"} timeline`;
-  elements["host-controls"].href = `/host?room=${encodeURIComponent(room)}&mode=controller`;
+  elements["host-controls"].href = roomRoleUrl("host", room, { mode: "controller" });
 
   const canPlace = state.can.place;
   const canChallengePlace = state.can.placeChallenge;

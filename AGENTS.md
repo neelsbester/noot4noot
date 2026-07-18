@@ -143,13 +143,15 @@ The large playlist CSVs currently in the repo are working input data. Do not del
 
 - Python tests: 102 passing across `tests/` and `voice_lab/tests`.
 - Focused multiplayer tests: 17 passing.
-- Worker/game tests: 30 passing.
+- Worker/game tests: 31 passing.
 - Three-phone multiplayer browser smoke test: passing through purchase,
   playback/resume/replacement, placement, pass/contest, delegated controls,
   callback recovery, and admin invite creation.
+- One-window test-lab browser smoke: passing through isolated seat
+  provisioning, quick start, simulated playback, placement, pass, and reveal.
 - Staging: deployed from `main` and gated by the owner-only Cloudflare Access
   application at `https://staging.noot4noot.bestermedia.me`; a separate exact
-  service identity runs the post-deploy browser smoke and is rejected outside
+  service identity runs the post-deploy API smoke and is rejected outside
   staging.
 - Player tests: 40 passing.
 - Vite production build: passing.

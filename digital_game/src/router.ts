@@ -9,7 +9,7 @@ import { isAdminIdentity, requireAccessIdentity } from "./access";
 import { accessCookie, readAccessToken, readRoomToken, roomCookie } from "./cookies";
 import { DECKS } from "./decks";
 import { GameError } from "./domain/errors";
-import { hashSecret } from "./security";
+import { hashSecret, randomId, randomToken, secureRandomIndex } from "./security";
 import type { DirectoryDurableObject } from "./durable/directory";
 import type { RoomDurableObject } from "./durable/room";
 import {
@@ -26,6 +26,9 @@ const MAX_BODY_BYTES = 16_384;
 const ROOM_CODE_PATTERN = /^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{4}$/u;
 const SESSION_TOKEN_PATTERN = /^[A-Za-z0-9_-]{40,128}$/u;
 const REQUEST_ID_PATTERN = /^[A-Za-z0-9-]{16,80}$/u;
+const ROOM_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const LAB_SEATS = ["lab-host", "lab-team-a", "lab-team-b"] as const;
+type LabSeat = typeof LAB_SEATS[number];
 
 export async function handleRequest(
   request: Request,
@@ -41,7 +44,7 @@ export async function handleRequest(
   } catch (error) {
     response = errorResponse(error);
   }
-  const secured = secureResponse(response, url, request.method);
+  const secured = secureResponse(response, url, request.method, env);
   console.log(JSON.stringify({
     message: "request completed",
     method: request.method,
@@ -99,6 +102,13 @@ async function route(
     await requireAdmin(request, env);
     return serveAsset(request, env, "/admin.html");
   }
+  if (path === "/test-lab" || path === "/test-lab/" || path === "/test-lab.html") {
+    if (env.ENVIRONMENT === "production") {
+      throw new GameError("Route not found", "not_found", 404);
+    }
+    if (env.ENVIRONMENT !== "local") await requireAdmin(request, env);
+    return serveAsset(request, env, "/test-lab.html");
+  }
   if (path.startsWith("/api/admin/")) {
     await requireAdmin(request, env);
     return handleAdmin(request, url, env);
@@ -127,7 +137,7 @@ async function route(
     });
     if (!initialized.ok) return fromService(initialized);
     ctx.waitUntil(updateDirectorySummary(directory, room));
-    return roomSessionResponse(initialized.value, hostToken, url, 201);
+    return roomSessionResponse(initialized.value, hostToken, url, env, 201);
   }
 
   const teamJoin = path.match(/^\/api\/rooms\/([^/]+)\/teams$/u);
@@ -148,24 +158,24 @@ async function route(
     const snapshot = await room.snapshot(teamToken, false);
     if (!snapshot.ok) return fromService(snapshot);
     ctx.waitUntil(updateDirectorySummary(directory, room));
-    return roomSessionResponse(snapshot.value, teamToken, url, 201);
+    return roomSessionResponse(snapshot.value, teamToken, url, env, 201);
   }
 
   const roomState = path.match(/^\/api\/rooms\/([^/]+)\/state$/u);
   if (request.method === "GET" && roomState?.[1]) {
     const code = normalizeRoomCode(roomState[1]);
-    const token = requireRoomSession(request, code);
+    const token = requireRoomSession(request, code, labSeat(url, env));
     const room = env.ROOMS.getByName(code);
     const result = await room.snapshot(token, url.searchParams.get("mode") === "controller");
     return result.ok
-      ? roomSessionResponse(result.value, token, url, 200)
+      ? roomSessionResponse(result.value, token, url, env, 200)
       : fromService(result);
   }
 
   const roomActions = path.match(/^\/api\/rooms\/([^/]+)\/actions$/u);
   if (request.method === "POST" && roomActions?.[1]) {
     const code = normalizeRoomCode(roomActions[1]);
-    const token = requireRoomSession(request, code);
+    const token = requireRoomSession(request, code, labSeat(url, env));
     const body = await readJson(request);
     const action = parseGameAction(body.action);
     const result = await env.ROOMS.getByName(code).act({
@@ -178,14 +188,14 @@ async function route(
     });
     if (result.ok) ctx.waitUntil(updateDirectorySummary(directory, env.ROOMS.getByName(code)));
     return result.ok
-      ? roomSessionResponse(result.value, token, url, 200)
+      ? roomSessionResponse(result.value, token, url, env, 200)
       : fromService(result);
   }
 
   const socketPath = path.match(/^\/ws\/rooms\/([^/]+)$/u);
   if (request.method === "GET" && socketPath?.[1]) {
     const code = normalizeRoomCode(socketPath[1]);
-    requireRoomSession(request, code);
+    requireRoomSession(request, code, labSeat(url, env));
     return env.ROOMS.getByName(code).fetch(request);
   }
 
@@ -198,6 +208,13 @@ async function route(
 async function handleAdmin(request: Request, url: URL, env: CloudflareEnv): Promise<Response> {
   const path = url.pathname;
   const directory = env.DIRECTORY.getByName("directory");
+  if (request.method === "POST" && path === "/api/admin/test-lab") {
+    if (env.ENVIRONMENT === "production") {
+      throw new GameError("Admin route not found", "not_found", 404);
+    }
+    await readJson(request);
+    return createTestLab(env, directory, url);
+  }
   if (request.method === "GET" && path === "/api/admin/dashboard") {
     return json(await directory.dashboard() satisfies AdminDashboard);
   }
@@ -234,6 +251,78 @@ async function handleAdmin(request: Request, url: URL, env: CloudflareEnv): Prom
     return fromService(result);
   }
   return json({ error: "Admin route not found", code: "not_found" } satisfies ErrorPayload, 404);
+}
+
+async function createTestLab(
+  env: CloudflareEnv,
+  directory: DurableObjectStub<DirectoryDurableObject>,
+  url: URL,
+): Promise<Response> {
+  const now = Date.now();
+  const hostToken = randomToken();
+  const teamAToken = randomToken();
+  const teamBToken = randomToken();
+  let room: DurableObjectStub<RoomDurableObject> | null = null;
+  let hostSnapshot: RoomSnapshot | null = null;
+
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const code = randomRoomCode();
+    const candidate = env.ROOMS.getByName(code);
+    const existing = await candidate.summary();
+    if (existing.ok) continue;
+    const initialized = await candidate.initialize({
+      code,
+      hostToken,
+      settings: {},
+      now,
+    });
+    if (!initialized.ok) continue;
+    room = candidate;
+    hostSnapshot = initialized.value;
+    break;
+  }
+  if (!room || !hostSnapshot) {
+    throw new GameError("Could not create a test room", "room_allocation_failed", 503);
+  }
+
+  const teamA = await room.join({
+    name: "Needle Crew",
+    teamToken: teamAToken,
+    requestId: randomId(),
+    now: now + 1,
+  });
+  if (!teamA.ok) return fromService(teamA);
+  const teamB = await room.join({
+    name: "Bassline Club",
+    teamToken: teamBToken,
+    requestId: randomId(),
+    now: now + 2,
+  });
+  if (!teamB.ok) return fromService(teamB);
+  await updateDirectorySummary(directory, room);
+
+  const response = json({
+    room: hostSnapshot.room.code,
+    phase: "lobby",
+    teams: [
+      { id: teamA.value.teamId, name: "Needle Crew", seat: "lab-team-a" },
+      { id: teamB.value.teamId, name: "Bassline Club", seat: "lab-team-b" },
+    ],
+  }, 201);
+  const secure = url.protocol === "https:";
+  response.headers.append(
+    "Set-Cookie",
+    roomCookie(hostSnapshot.room.code, hostToken, hostSnapshot.room.expiresAt, secure, "lab-host"),
+  );
+  response.headers.append(
+    "Set-Cookie",
+    roomCookie(hostSnapshot.room.code, teamAToken, hostSnapshot.room.expiresAt, secure, "lab-team-a"),
+  );
+  response.headers.append(
+    "Set-Cookie",
+    roomCookie(hostSnapshot.room.code, teamBToken, hostSnapshot.room.expiresAt, secure, "lab-team-b"),
+  );
+  return response;
 }
 
 async function requireInviteAccess(
@@ -281,10 +370,30 @@ async function requireAdmin(request: Request, env: CloudflareEnv): Promise<void>
   }
 }
 
-function requireRoomSession(request: Request, code: string): string {
-  const token = readRoomToken(request, code);
+function requireRoomSession(request: Request, code: string, seat: LabSeat | null = null): string {
+  const token = readRoomToken(request, code, seat);
   if (!token) throw new GameError("Room session is invalid", "invalid_session", 401);
   return token;
+}
+
+function labSeat(url: URL, env: CloudflareEnv): LabSeat | null {
+  const seat = url.searchParams.get("seat");
+  if (seat === null) return null;
+  if (env.ENVIRONMENT === "production" || !isLabSeat(seat)) {
+    throw new GameError("Room session is invalid", "invalid_session", 401);
+  }
+  return seat;
+}
+
+function isLabSeat(value: string | null): value is LabSeat {
+  return LAB_SEATS.includes(value as LabSeat);
+}
+
+function randomRoomCode(): string {
+  return Array.from(
+    { length: 4 },
+    () => ROOM_ALPHABET[secureRandomIndex(ROOM_ALPHABET.length)] ?? "A",
+  ).join("");
 }
 
 function normalizeRoomCode(value: string): string {
@@ -317,12 +426,19 @@ function roomSessionResponse(
   snapshot: RoomSnapshot,
   token: string,
   url: URL,
+  env: CloudflareEnv,
   status: number,
 ): Response {
   const response = json(snapshot, status);
   response.headers.append(
     "Set-Cookie",
-    roomCookie(snapshot.room.code, token, snapshot.room.expiresAt, url.protocol === "https:"),
+    roomCookie(
+      snapshot.room.code,
+      token,
+      snapshot.room.expiresAt,
+      url.protocol === "https:",
+      labSeat(url, env),
+    ),
   );
   return response;
 }
@@ -414,27 +530,37 @@ function errorResponse(error: unknown): Response {
   return json({ error: "Internal server error", code: "server_error" } satisfies ErrorPayload, 500);
 }
 
-function secureResponse(response: Response, url: URL, method: string): Response {
+function secureResponse(
+  response: Response,
+  url: URL,
+  method: string,
+  env: CloudflareEnv,
+): Response {
   if (response.status === 101) return response;
   const headers = new Headers(response.headers);
+  const framedLabSeat = env.ENVIRONMENT !== "production"
+    && isLabSeat(url.searchParams.get("seat"))
+    && ["/host", "/host/", "/team", "/team/"].includes(url.pathname);
+  const labShell = env.ENVIRONMENT !== "production"
+    && ["/test-lab", "/test-lab/", "/test-lab.html"].includes(url.pathname);
   headers.set("X-Content-Type-Options", "nosniff");
   headers.set("Referrer-Policy", "no-referrer");
   headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()");
-  headers.set("X-Frame-Options", "DENY");
+  headers.set("X-Frame-Options", framedLabSeat ? "SAMEORIGIN" : "DENY");
   headers.set(
     "Content-Security-Policy",
     [
       "default-src 'self'",
       "base-uri 'none'",
       "object-src 'none'",
-      "frame-ancestors 'none'",
+      `frame-ancestors ${framedLabSeat ? "'self'" : "'none'"}`,
       "form-action 'self' https://accounts.spotify.com",
       "script-src 'self' https://sdk.scdn.co",
       "style-src 'self'",
       "img-src 'self' data:",
       "font-src 'self'",
       "connect-src 'self' https://accounts.spotify.com https://api.spotify.com wss://*.spotify.com",
-      "frame-src https://sdk.scdn.co",
+      `frame-src ${labShell ? "'self' " : ""}https://sdk.scdn.co`,
       "media-src 'self' blob: https://*.spotifycdn.com",
     ].join("; "),
   );

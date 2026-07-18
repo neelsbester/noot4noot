@@ -243,6 +243,61 @@ describe("Worker HTTP boundary", () => {
     });
   });
 
+  it("creates an owner-only three-phone lab with isolated seat cookies", async () => {
+    const origin = "http://example.test";
+    const labResponse = await exports.default.fetch(new Request(`${origin}/api/admin/test-lab`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Origin": origin,
+        "X-Noot4Noot-Admin-Email": "neelsbester1993@gmail.com",
+      },
+      body: "{}",
+    }));
+    expect(labResponse.status).toBe(201);
+    const lab = await labResponse.json<{ room: string; teams: Array<{ name: string }> }>();
+    expect(lab.room).toMatch(/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{4}$/u);
+    expect(lab.teams.map((team) => team.name)).toEqual(["Needle Crew", "Bassline Club"]);
+
+    const cookies = labResponse.headers.getSetCookie();
+    const hostCookie = cookies.find((cookie) => cookie.startsWith("noot_room_lab_host="));
+    const teamACookie = cookies.find((cookie) => cookie.startsWith("noot_room_lab_team_a="));
+    const teamBCookie = cookies.find((cookie) => cookie.startsWith("noot_room_lab_team_b="));
+    expect(hostCookie).toBeDefined();
+    expect(teamACookie).toBeDefined();
+    expect(teamBCookie).toBeDefined();
+
+    const readSeat = async (seat: string, cookie: string | undefined) => {
+      if (!cookie) throw new Error(`missing ${seat} cookie`);
+      const response = await exports.default.fetch(new Request(
+        `${origin}/api/rooms/${lab.room}/state?seat=${seat}`,
+        { headers: { "Cookie": cookiePair(cookie) } },
+      ));
+      expect(response.status).toBe(200);
+      return response.json<{ viewer: { role: string; teamId: string | null } }>();
+    };
+    await expect(readSeat("lab-host", hostCookie)).resolves.toMatchObject({
+      viewer: { role: "host", teamId: null },
+    });
+    const [teamA, teamB] = await Promise.all([
+      readSeat("lab-team-a", teamACookie),
+      readSeat("lab-team-b", teamBCookie),
+    ]);
+    expect(teamA.viewer.role).toBe("team");
+    expect(teamB.viewer.role).toBe("team");
+    expect(teamA.viewer.teamId).not.toBe(teamB.viewer.teamId);
+
+    const framedHost = await exports.default.fetch(new Request(
+      `${origin}/host?room=${lab.room}&seat=lab-host&lab=1`,
+    ));
+    expect(framedHost.headers.get("X-Frame-Options")).toBe("SAMEORIGIN");
+    expect(framedHost.headers.get("Content-Security-Policy")).toContain("frame-ancestors 'self'");
+
+    const normalHost = await exports.default.fetch(new Request(`${origin}/host?room=${lab.room}`));
+    expect(normalHost.headers.get("X-Frame-Options")).toBe("DENY");
+    expect(normalHost.headers.get("Content-Security-Policy")).toContain("frame-ancestors 'none'");
+  });
+
   it("rejects cross-origin mutations and oversized bodies", async () => {
     const missingOrigin = await exports.default.fetch(new Request("http://example.test/api/access/redeem", {
       method: "POST",
