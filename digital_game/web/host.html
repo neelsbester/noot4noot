@@ -1,107 +1,116 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#f2efe8">
+  <meta name="theme-color" content="#e9e5dc">
   <title>Noot4Noot — Host</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/game.css">
 </head>
-<body class="host-body">
-  <main class="host-shell">
-    <header class="app-header">
-      <a class="brand" href="/"><span class="brand-disc" aria-hidden="true"></span><span>NOOT4NOOT</span></a>
-      <div class="header-room">ROOM <strong id="header-room-code">----</strong></div>
-      <div class="host-header-actions">
-        <button id="back-to-team-button" class="mode-switch-button back-to-team" type="button" hidden><span>←</span> Team view</button>
-        <div class="live-pill"><i></i><span id="host-mode-label">HOST TABLE</span></div>
-      </div>
+<body>
+  <main class="shell">
+    <header class="site-header">
+      <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"></span>Noot4Noot</a>
+      <span class="room-badge">Room <strong id="header-room">----</strong></span>
+      <span id="connection" class="status-pill" role="status" aria-live="polite">Connecting</span>
     </header>
 
-    <section id="host-loading" class="full-state"><div class="loading-disc"></div><p>Opening your table…</p></section>
-
-    <section id="host-lobby" class="host-lobby" hidden>
-      <div class="lobby-code-card">
-        <p class="overline">YOUR ROOM CODE</p>
-        <h1 id="lobby-room-code">----</h1>
-        <p>Open this address on the phone and iPad:</p>
-        <button id="copy-join-url" class="join-url" type="button"><span id="join-url">Loading address…</span><b>COPY</b></button>
-        <div id="lobby-control-code-card" class="control-code-card"><span>HOST CONTROL CODE</span><strong id="lobby-control-code">----</strong><small>Share this only with a team taking over host duties.</small></div>
-      </div>
-      <div class="lobby-roster">
-        <div class="section-heading"><div><span>TEAMS</span><h2>Waiting in the booth</h2></div><strong id="lobby-team-count">0 / 2 minimum</strong></div>
-        <div id="lobby-team-list" class="lobby-team-list"></div>
-        <button id="start-game-button" class="primary-button" type="button" disabled>Start the music <span>→</span></button>
-      </div>
+    <section id="loading" class="loading-state">
+      <div><div class="spinner"></div><p>Opening the host table…</p></div>
     </section>
 
-    <section id="host-game" class="host-game" hidden>
-      <div class="host-main-column">
-        <div class="round-strip">
-          <div><span>ROUND</span><strong id="host-round-number">01</strong></div>
-          <div class="round-active"><span>NOW PLAYING FOR</span><strong id="host-active-team">—</strong></div>
-          <span id="host-phase" class="phase-pill">PLACEMENT</span>
+    <section id="lobby" class="lobby-grid" hidden>
+      <article class="panel">
+        <span class="eyebrow">Invite your teams</span>
+        <h1 class="page-title">Room is ready.</h1>
+        <div id="room-code" class="room-code">----</div>
+        <p class="muted">Share this code. Everyone must open the same invite link first.</p>
+        <button id="copy-join" class="join-link" type="button"><span id="join-url"></span><strong>Copy address</strong></button>
+      </article>
+      <aside class="panel">
+        <div class="panel-heading"><div><span class="eyebrow">Lobby</span><h2>Teams</h2></div><strong id="team-count">0 / 2</strong></div>
+        <div id="lobby-teams" class="team-list"></div>
+        <div class="stack">
+          <p id="lobby-help" class="message">At least two teams must join and everyone must be ready.</p>
+          <button id="start-game" class="button primary full" type="button" disabled>Start game</button>
         </div>
-
-        <section class="host-stage">
-          <div id="host-mystery-card" class="mystery-card" aria-label="Mystery song card">
-            <div class="mystery-back"><span>NOOT</span><i></i><span>4NOOT</span></div>
-            <div id="host-reveal-face" class="mystery-front"><strong>????</strong><span>Mystery track</span><small>Waiting for reveal</small></div>
-          </div>
-          <div class="host-stage-copy"><span id="host-stage-kicker">CURRENT SONG</span><h1 id="host-stage-title">Waiting for a placement</h1><p id="host-stage-copy">The active team is deciding where the card belongs.</p></div>
-          <div class="spotify-console">
-            <span>SPOTIFY OUTPUT</span>
-            <button id="spotify-connect-button" class="spotify-button" type="button">Connect Spotify</button>
-            <div id="spotify-device-row" class="spotify-device-row" hidden>
-              <select id="spotify-device-select" aria-label="Spotify playback device"><option value="">Choose device</option></select>
-              <button id="spotify-refresh-button" type="button" aria-label="Refresh Spotify devices">↻</button>
-            </div>
-            <div class="spotify-playback-actions">
-              <button id="play-song-button" class="play-song-button" type="button" disabled><span class="play-icon" aria-hidden="true"></span> Play song</button>
-              <button id="skip-song-button" class="skip-song-button" type="button" hidden><span>↠</span> Skip song</button>
-            </div>
-            <a id="spotify-fallback-link" class="spotify-fallback" href="#" target="_blank" rel="noopener">Open track in Spotify instead</a>
-          </div>
-        </section>
-
-        <section class="board-panel">
-          <div class="section-heading"><div><span>ACTIVE TIMELINE</span><h2 id="board-team-name">—</h2></div><p id="board-status">Waiting for their choice</p></div>
-          <div id="host-timeline" class="timeline"></div>
-        </section>
-
-        <div class="host-round-actions">
-          <button id="close-challenge-button" class="secondary-button" type="button" hidden>No challenge · close window</button>
-          <button id="host-reveal-button" class="primary-button compact" type="button" hidden>Reveal card <span>↻</span></button>
-          <button id="next-round-button" class="primary-button compact" type="button" hidden>Next round <span>→</span></button>
-          <p id="host-action-copy">Waiting for the active team…</p>
-        </div>
-      </div>
-
-      <aside class="host-sidebar">
-        <div class="section-heading"><div><span>HOST CONTROL</span><h2>Teams & tokens</h2></div></div>
-        <div id="host-control-code-card" class="control-code-card compact"><span>CONTROL CODE</span><strong id="host-control-code">----</strong><small>Required once per team device.</small></div>
-        <div class="token-rules"><i></i><p><strong>+1</strong> correct title and artist<br><strong>−1</strong> challenge · <strong>−3</strong> random card</p></div>
-        <div id="host-team-list" class="host-team-list"></div>
-        <div class="challenge-status"><span>CHALLENGE</span><strong id="challenge-status-copy">Not open yet</strong></div>
       </aside>
     </section>
 
-    <section id="host-finished" class="game-over-screen" hidden>
-      <div class="game-over-card">
-        <span class="game-over-kicker">FINAL PRESSING</span>
-        <div class="game-over-disc" aria-hidden="true"></div>
-        <h1 id="host-finished-title">We have a winner.</h1>
-        <p id="host-finished-copy">The final timeline is complete.</p>
-        <div id="host-final-standings" class="final-standings"></div>
-        <a class="primary-button game-over-action" href="/">Start a new game <span>→</span></a>
+    <section id="game" hidden>
+      <div class="round-strip">
+        <div><span>Round</span><strong id="round-number">1</strong></div>
+        <div><span>Playing for</span><strong id="active-team">—</strong></div>
+        <span id="phase" class="status-pill" aria-live="polite">Turn start</span>
+      </div>
+      <div class="game-grid">
+        <div>
+          <article class="panel stage">
+            <div id="record" class="record" aria-hidden="true"></div>
+            <div>
+              <span id="stage-kicker" class="eyebrow">Mystery song</span>
+              <h1 id="stage-title" class="stage-title" aria-live="polite">Ready when you are.</h1>
+              <p id="stage-copy" class="muted">The host starts every song manually.</p>
+              <div id="song-meta" class="song-meta" hidden><strong id="song-title"></strong><span id="song-artist"></span><span id="song-year"></span></div>
+              <div id="spotify-box" class="spotify-box">
+                <div class="action-row">
+                  <button id="spotify-connect" class="button ghost" type="button">Connect Spotify</button>
+                  <button id="spotify-disconnect" class="button compact" type="button" hidden>Disconnect</button>
+                </div>
+                <div id="spotify-device-row" class="spotify-row" hidden>
+                  <select id="spotify-device" aria-label="Spotify playback device"><option value="">Choose playback device</option></select>
+                  <button id="spotify-refresh" class="button compact" type="button">Refresh</button>
+                </div>
+                <div class="action-row">
+                  <button id="play-song" class="button green" type="button" disabled>Play this song</button>
+                  <button id="pause-song" class="button" type="button" disabled>Pause</button>
+                  <a id="spotify-fallback" class="button compact" href="#" target="_blank" rel="noopener" hidden>Open in Spotify</a>
+                </div>
+              </div>
+              <div id="controller-note" class="controller-note" hidden><strong>Remote host controls.</strong> Spotify stays on the original host device.</div>
+            </div>
+          </article>
+
+          <article class="panel timeline-panel">
+            <div class="panel-heading"><div><span class="eyebrow">Active timeline</span><h2 id="timeline-team">—</h2></div><span id="timer" class="timer"></span></div>
+            <div id="timeline" class="timeline"></div>
+            <p id="round-help" class="message">Waiting for the active team.</p>
+            <div class="action-row">
+              <button id="force-reveal" class="button" type="button" hidden>Force reveal</button>
+              <button id="award-bonus" class="button" type="button" hidden>Award title + artist token</button>
+              <button id="next-round" class="button primary" type="button" hidden>Next round</button>
+            </div>
+          </article>
+        </div>
+
+        <aside class="side-stack">
+          <article class="panel">
+            <div class="panel-heading"><div><span class="eyebrow">Scoreboard</span><h2>Teams</h2></div></div>
+            <div id="game-teams" class="team-list"></div>
+          </article>
+          <article class="panel">
+            <span class="eyebrow">Host controls</span>
+            <p class="muted">Any team device may open these controls. Only this original host can start Spotify playback.</p>
+            <div class="action-row">
+              <button id="back-to-team" class="button full" type="button" hidden>Back to team view</button>
+            </div>
+          </article>
+        </aside>
+      </div>
+    </section>
+
+    <section id="finished" class="panel result-card" hidden>
+      <span class="eyebrow">Final pressing</span>
+      <h1 id="result-title" class="result-title">Game complete.</h1>
+      <p id="result-copy" class="muted"></p>
+      <div id="standings" class="standings"></div>
+      <div class="action-row">
+        <button id="rematch" class="button primary" type="button">Play a rematch</button>
+        <a class="button" href="/">Leave room</a>
       </div>
     </section>
   </main>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script>window.onSpotifyWebPlaybackSDKReady = window.onSpotifyWebPlaybackSDKReady || (() => {});</script>
   <script src="https://sdk.scdn.co/spotify-player.js"></script>
   <script type="module" src="/host.js"></script>
 </body>

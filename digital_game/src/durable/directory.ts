@@ -109,7 +109,7 @@ export class DirectoryDurableObject extends DurableObject<CloudflareEnv> {
       const existingHash = existingSessionToken ? await hashSecret(existingSessionToken) : null;
       const sessionToken = randomToken();
       const sessionHash = await hashSecret(sessionToken);
-      this.consumeRateLimitInternal(`redeem:${rateLimitKey}`, 12, 10 * 60 * 1000, now);
+      this.consumeRateLimitInternal(`redeem:${rateLimitKey}`, 60, 10 * 60 * 1000, now);
       const invite = this.ctx.storage.sql
         .exec<InviteRow>("SELECT * FROM invites WHERE token_hash = ?", tokenHash)
         .toArray()[0];

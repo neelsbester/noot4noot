@@ -143,8 +143,6 @@ class GameRequestHandler(BaseHTTPRequestHandler):
             "/callback": "host.html",
             "/team": "team.html",
             "/team/": "team.html",
-            "/test-lab": "test-lab.html",
-            "/test-lab/": "test-lab.html",
         }
         relative = route_map.get(path, path.lstrip("/"))
         candidate = (WEB_ROOT / relative).resolve()

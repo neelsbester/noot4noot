@@ -421,10 +421,6 @@ def test_http_server_creates_and_reads_a_room():
         assert state["room"]["status"] == "lobby"
         assert state["viewer"]["role"] == "host"
 
-        with urlopen(f"{base}/test-lab") as response:
-            test_lab = response.read().decode("utf-8")
-        assert "Three-phone flight deck" in test_lab
-        assert test_lab.count("<iframe") == 3
     finally:
         server.shutdown()
         server.server_close()

@@ -30,7 +30,7 @@ export function spotifyRedirectUri() {
 export async function configureSpotify() {
   const response = await fetch('/api/config');
   const config = await response.json();
-  clientId = config.spotify_client_id || '';
+  clientId = config.spotifyClientId || '';
   return config;
 }
 
@@ -51,7 +51,7 @@ async function codeChallenge(verifier) {
 
 export async function beginSpotifyLogin(room) {
   if (!clientId) await configureSpotify();
-  if (!clientId) throw new Error('VITE_SPOTIFY_CLIENT_ID is missing from player/.env');
+  if (!clientId) throw new Error('Spotify is not configured for this environment.');
   if (!window.crypto?.subtle) throw new Error('Spotify login must be opened from 127.0.0.1 or HTTPS');
 
   const verifier = randomString(64);
@@ -78,7 +78,12 @@ export async function handleSpotifyCallback() {
   const code = params.get('code');
   const error = params.get('error');
   if (!code && !error) return null;
-  if (error) throw new Error(`Spotify login failed: ${error}`);
+  if (error) {
+    const room = sessionStorage.getItem(ROOM_KEY);
+    if (room) window.history.replaceState({}, document.title, `/host?room=${encodeURIComponent(room)}`);
+    clearPendingLogin();
+    throw new Error(`Spotify login failed: ${error}`);
+  }
   if (!clientId) await configureSpotify();
 
   const state = params.get('state');
@@ -88,6 +93,10 @@ export async function handleSpotifyCallback() {
   const seat = sessionStorage.getItem(SEAT_KEY) || '';
   const mode = sessionStorage.getItem(MODE_KEY) || '';
   if (!state || state !== expectedState || !verifier || !room) {
+    if (room) {
+      restoreHostUrl(room, seat, mode);
+      clearPendingLogin();
+    }
     throw new Error('Spotify login state expired. Please connect again.');
   }
 
@@ -103,19 +112,17 @@ export async function handleSpotifyCallback() {
     }),
   });
   const data = await response.json();
-  if (!response.ok) throw new Error(data.error_description || data.error || 'Spotify token exchange failed');
+  if (!response.ok) {
+    restoreHostUrl(room, seat, mode);
+    clearPendingLogin();
+    throw new Error(data.error_description || data.error || 'Spotify token exchange failed');
+  }
 
   localStorage.setItem(TOKEN_KEY, data.access_token);
   localStorage.setItem(EXPIRY_KEY, String(Date.now() + data.expires_in * 1000));
   if (data.refresh_token) localStorage.setItem(REFRESH_KEY, data.refresh_token);
-  sessionStorage.removeItem(VERIFIER_KEY);
-  sessionStorage.removeItem(STATE_KEY);
-  sessionStorage.removeItem(ROOM_KEY);
-  sessionStorage.removeItem(SEAT_KEY);
-  sessionStorage.removeItem(MODE_KEY);
-  const seatQuery = seat ? `&seat=${encodeURIComponent(seat)}` : '';
-  const modeQuery = mode ? `&mode=${encodeURIComponent(mode)}` : '';
-  window.history.replaceState({}, document.title, `/host?room=${encodeURIComponent(room)}${seatQuery}${modeQuery}`);
+  clearPendingLogin();
+  restoreHostUrl(room, seat, mode);
   return data.access_token;
 }
 
@@ -202,4 +209,18 @@ export function clearSpotifySession() {
   localStorage.removeItem(EXPIRY_KEY);
   localStorage.removeItem(REFRESH_KEY);
   localStorage.removeItem(DEVICE_KEY);
+}
+
+function clearPendingLogin() {
+  sessionStorage.removeItem(VERIFIER_KEY);
+  sessionStorage.removeItem(STATE_KEY);
+  sessionStorage.removeItem(ROOM_KEY);
+  sessionStorage.removeItem(SEAT_KEY);
+  sessionStorage.removeItem(MODE_KEY);
+}
+
+function restoreHostUrl(room, seat = '', mode = '') {
+  const seatQuery = seat ? `&seat=${encodeURIComponent(seat)}` : '';
+  const modeQuery = mode ? `&mode=${encodeURIComponent(mode)}` : '';
+  window.history.replaceState({}, document.title, `/host?room=${encodeURIComponent(room)}${seatQuery}${modeQuery}`);
 }

@@ -1,439 +1,240 @@
 import {
-  animateRevealPlacement,
-  buildRevealTimeline,
+  api,
+  createRoomUpdates,
   createToast,
-  decadeClass,
-  escapeHtml,
-  gameAction,
-  loadSession,
+  formatTimer,
+  performAction,
   renderTimeline,
-  request,
+  revealPlacement,
   roomFromUrl,
-  saveSession,
-  seatFromUrl,
-  startPolling,
   teamById,
-} from './shared.js';
+} from "./shared.js";
 
+const elements = Object.fromEntries(
+  [...document.querySelectorAll("[id]")].map((element) => [element.id, element]),
+);
+const toast = createToast(elements.toast);
 const room = roomFromUrl();
-
-function importTeamSession() {
-  const migration = new URLSearchParams(window.location.hash.slice(1)).get('team_session');
-  if (!room || !migration) return;
-  try {
-    const session = JSON.parse(migration);
-    if (session?.token && session?.teamId) {
-      saveSession('team', room, session.token, session.teamId);
-    }
-  } catch {
-    // An invalid migration fragment is ignored and normal session validation handles it.
-  }
-  window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}`);
-}
-
-importTeamSession();
-const session = loadSession('team', room);
-const token = session?.token || '';
-const viewerTeamId = session?.teamId || '';
-const loading = document.querySelector('#team-loading');
-const lobby = document.querySelector('#team-lobby');
-const game = document.querySelector('#team-game');
-const finished = document.querySelector('#team-finished');
-const timeline = document.querySelector('#team-timeline');
-const mainButton = document.querySelector('#team-main-button');
-const noChallengeButton = document.querySelector('#no-challenge-button');
-const mysteryCard = document.querySelector('#team-mystery-card');
-const resultBanner = document.querySelector('#team-result');
-const ghost = document.querySelector('#drag-ghost');
-const toast = createToast(document.querySelector('#toast'));
-const hostModeButton = document.querySelector('#team-host-mode-button');
-const hostAccessDialog = document.querySelector('#host-access-dialog');
-const hostAccessForm = document.querySelector('#host-access-form');
-
 let state = null;
-let lastRevision = -1;
-let actionMode = '';
-let dragging = false;
-let pointerId = null;
-let resultTimer = null;
+let selectedPlacement = null;
+let selectedChallengePlacement = null;
+let stopUpdates = null;
+let timerHandle = null;
+let highestSeenRevision = -1;
 
-function setText(selector, value) {
-  const element = document.querySelector(selector);
-  if (element) element.textContent = value;
+function self() {
+  return teamById(state, state?.viewer.teamId);
 }
 
-function viewerTeam() {
-  return teamById(state, viewerTeamId);
-}
-
-async function act(action, payload = {}) {
-  try {
-    state = await gameAction(room, token, action, payload);
-    lastRevision = state.room.revision;
-    render();
-  } catch (error) {
-    toast(error.message);
-    if (error.code === 'challenge_claimed') await refreshState();
+function setSection(name) {
+  for (const section of ["loading", "lobby", "game", "finished"]) {
+    elements[section].hidden = section !== name;
   }
 }
 
-function configureMainButton(mode, label, disabled = false) {
-  actionMode = mode;
-  mainButton.disabled = disabled;
-  mainButton.innerHTML = `${escapeHtml(label)} <span>${mode === 'reveal' ? '↻' : mode === 'claim_challenge' ? '!' : '✓'}</span>`;
+async function act(action) {
+  try {
+    acceptSnapshot(await performAction(room, state, action));
+    return true;
+  } catch (error) {
+    await refresh();
+    toast(error.message);
+    return false;
+  }
+}
+
+function teamRow(team) {
+  const row = document.createElement("div");
+  row.className = `team-row${team.isActive ? " is-active" : ""}`;
+  const initial = document.createElement("span");
+  initial.className = "team-initial";
+  initial.textContent = team.name.slice(0, 1).toUpperCase();
+  const main = document.createElement("div");
+  main.className = "team-row-main";
+  const name = document.createElement("strong");
+  name.textContent = team.name;
+  const detail = document.createElement("small");
+  detail.textContent = state.room.status === "lobby"
+    ? (team.ready ? "Ready" : "Not ready")
+    : `${team.cardCount} cards · ${team.tokens} tokens`;
+  main.append(name, detail);
+  row.append(initial, main);
+  return row;
 }
 
 function renderLobby() {
-  const team = viewerTeam();
-  loading.hidden = true;
-  lobby.hidden = false;
-  game.hidden = true;
-  finished.hidden = true;
-  hostModeButton.hidden = false;
-  resultBanner.hidden = true;
-  setText('#team-name', team?.name || 'YOUR TEAM');
-  setText('#team-token-count', team?.tokens ?? 0);
-  setText('#team-room-code', room);
-  setText('#team-status', 'Waiting in lobby');
+  setSection("lobby");
+  const team = self();
+  elements["lobby-title"].textContent = `${team?.name || "Your team"} is in.`;
+  elements["lobby-teams"].replaceChildren(...state.teams.map(teamRow));
+  elements.ready.textContent = team?.ready ? "Not ready yet" : "I’m ready";
+  elements.ready.classList.toggle("primary", !team?.ready);
+  elements["lobby-host-controls"].href = `/host?room=${encodeURIComponent(room)}&mode=controller`;
 }
 
-function phasePresentation(round, team, activeTeam, challenger) {
-  const isActive = team.id === round.active_team_id;
-  const isChallenger = team.id === round.challenge_team_id;
-
-  if (round.phase === 'placement') {
-    if (isActive) return ['YOUR TURN', 'Where does it belong?', 'Drag the mystery card into a gap, or tap a gap.'];
-    return ['LISTEN CLOSELY', `${activeTeam.name} is placing`, 'Your timeline is shown while you wait for the challenge window.'];
+function turnCopy(round, active, challenger) {
+  const mine = state.viewer.teamId;
+  if (round.phase === "turn_start") {
+    return round.activeTeamId === mine
+      ? ["Your turn", "Before the host starts the song, you may buy one random card."]
+      : [`${active?.name || "Another team"} is up`, "The host is waiting to start their song."];
   }
-  if (round.phase === 'challenge') {
-    if (isActive && !challenger) return ['POSITION LOCKED', 'Challenge window open', 'Another team can spend 1 token to challenge your position.'];
-    if (isActive) return ['CHALLENGED', `${challenger.name} called it`, 'They are choosing a different position on your timeline.'];
-    if (!challenger && round.viewer_passed) return ['PASSED', 'No challenge from you', 'Waiting for the other teams to decide.'];
-    if (!challenger) return ['CHALLENGE WINDOW', 'Think they got it wrong?', 'Challenge for 1 token, or pass with no challenge.'];
-    if (isChallenger) return ['YOUR CHALLENGE', 'Choose another gap', 'Place your challenge somewhere different from the locked card.'];
-    return ['TOO LATE', `${challenger.name} claimed it`, 'Only one team can challenge each card.'];
+  if (round.phase === "placement") {
+    return round.activeTeamId === mine
+      ? ["Place the mystery song", "Tap a gap, then lock your choice. You may request another song first."]
+      : [`${active?.name || "The active team"} is placing`, "Listen closely. You may get a chance to contest."];
   }
-  if (round.phase === 'reveal_ready') {
-    if (isActive) return ['READY', 'Flip the card', challenger ? 'Your placement and the challenge are both locked.' : 'Nobody challenged your position.'];
-    return ['ANSWERS LOCKED', 'Time for the reveal', `${activeTeam.name} can flip the mystery card now.`];
+  if (round.phase === "challenge" && round.challengeTeamId === mine) {
+    return ["You claimed the contest", "Choose a different gap and lock it."];
   }
-  if (round.phase === 'revealed') {
-    return ['REVEALED', `${round.song.year} · ${round.song.title}`, round.song.artist];
+  if (round.phase === "challenge" && round.activeTeamId === mine) {
+    return ["Your placement is locked", challenger ? `${challenger.name} is contesting it.` : "Waiting for the other teams."];
   }
-  return ['ROUND', 'Listen closely', ''];
-}
-
-function renderResult(round, activeTeam, challenger) {
-  window.clearTimeout(resultTimer);
-  if (round.phase !== 'revealed') {
-    resultBanner.hidden = true;
-    resultBanner.className = 'result-banner';
-    return;
+  if (round.phase === "challenge") {
+    return challenger
+      ? [`${challenger.name} claimed the contest`, "The first contest is the only one this round."]
+      : ["Contest or pass", "Spend one token to choose a different position, or choose no contest."];
   }
-
-  const winner = teamById(state, round.winner_team_id);
-  resultBanner.hidden = false;
-  const resultClass = round.outcome === 'challenge_won' ? 'is-challenge' : round.outcome === 'no_winner' ? 'is-wrong' : '';
-  resultBanner.className = `result-banner ${resultClass}`;
-  setText('#result-song', `${round.song.year} · ${round.song.title}`);
-  setText('#result-artist', round.song.artist);
-
-  if (round.outcome === 'challenge_won') {
-    setText('#result-symbol', '↯');
-    setText('#result-label', 'CHALLENGE WON');
-    setText('#result-owner', winner?.name || challenger?.name || 'CHALLENGER');
-  } else if (round.outcome === 'active_won') {
-    setText('#result-symbol', '✓');
-    setText('#result-label', challenger ? 'CHALLENGE DENIED' : 'PERFECT PLACEMENT');
-    setText('#result-owner', winner?.name || activeTeam.name);
-  } else {
-    setText('#result-symbol', '×');
-    setText('#result-label', 'NO ONE HAD IT');
-    setText('#result-owner', 'NO CARD');
-  }
-  resultTimer = window.setTimeout(() => resultBanner.classList.add('is-visible'), 1450);
-}
-
-function bindTimeline(interactiveAction) {
-  timeline.querySelectorAll('.timeline-gap').forEach(gap => {
-    gap.disabled = !interactiveAction;
-    if (interactiveAction) gap.addEventListener('click', () => act(interactiveAction, { slot: Number(gap.dataset.slot) }));
-  });
+  if (round.outcome === "active_won") return [`${active?.name || "The active team"} got the card`, `${round.song.title} — ${round.song.artist} (${round.song.year})`];
+  if (round.outcome === "challenge_won") return [`${challenger?.name || "The challenger"} stole the card`, `${round.song.title} — ${round.song.artist} (${round.song.year})`];
+  return ["Nobody got the card", `${round.song.title} — ${round.song.artist} (${round.song.year})`];
 }
 
 function renderGame() {
+  setSection("game");
   const round = state.round;
-  const team = viewerTeam();
-  const activeTeam = teamById(state, round.active_team_id);
-  const challenger = teamById(state, round.challenge_team_id);
-  const isActive = team.id === round.active_team_id;
-  const isChallenger = team.id === round.challenge_team_id;
-  const [kicker] = phasePresentation(round, team, activeTeam, challenger);
-  noChallengeButton.hidden = !state.can.pass_challenge;
+  const team = self();
+  const active = teamById(state, round.activeTeamId);
+  const challenger = teamById(state, round.challengeTeamId);
+  const [title, copy] = turnCopy(round, active, challenger);
+  elements["round-number"].textContent = String(round.number);
+  elements["team-name"].textContent = team?.name || "—";
+  elements.phase.textContent = round.phase.replaceAll("_", " ");
+  elements["turn-title"].textContent = title;
+  elements["turn-copy"].textContent = copy;
+  elements["card-count"].textContent = String(team?.cardCount ?? 0);
+  elements["token-count"].textContent = String(team?.tokens ?? 0);
+  elements["timeline-title"].textContent = `${active?.name || "Active"} timeline`;
+  elements["host-controls"].href = `/host?room=${encodeURIComponent(room)}&mode=controller`;
 
-  loading.hidden = true;
-  lobby.hidden = true;
-  game.hidden = false;
-  finished.hidden = true;
-  hostModeButton.hidden = false;
-  setText('#team-name', team.name);
-  setText('#team-token-count', team.tokens);
-  setText('#team-status', isActive ? 'Your turn' : `${activeTeam.name}'s turn`);
-  setText('#team-stage-kicker', kicker);
-
-  const revealed = round.phase === 'revealed';
-  mysteryCard.classList.toggle('is-flipped', revealed);
-  const canDragCard = Boolean(state.can.place || state.can.place_challenge);
-  mysteryCard.setAttribute('aria-disabled', String(!state.can.reveal));
-  mysteryCard.classList.toggle('can-drag', canDragCard);
-  mysteryCard.classList.toggle(
-    'is-waiting',
-    round.phase === 'reveal_ready' || (round.phase === 'challenge' && !state.can.place_challenge),
-  );
-  if (revealed) {
-    const revealFace = document.querySelector('#team-reveal-face');
-    revealFace.className = `mystery-front ${decadeClass(round.song.year)}`;
-    revealFace.innerHTML = `<strong>${escapeHtml(round.song.year)}</strong><span>${escapeHtml(round.song.title)}</span><small>${escapeHtml(round.song.artist)}</small>`;
-  }
-
-  let songs = state.viewer_timeline;
-  let placement = null;
-  let challengePlacement = null;
-  let interactiveAction = '';
-  let timelineKicker = 'YOUR TIMELINE';
-  let timelineOwner = team.name;
-  let help = `${team.card_count} / ${state.room.target_cards} cards`;
-
-  if (isActive || round.phase !== 'placement') {
-    songs = state.active_timeline;
-    timelineOwner = activeTeam.name;
-    timelineKicker = isActive ? 'YOUR TIMELINE' : 'ACTIVE TIMELINE';
-    if (!revealed) {
-      placement = round.placement;
-      challengePlacement = round.challenge_placement;
-    }
-  }
-  if (state.can.place) {
-    interactiveAction = 'place';
-    help = round.placement === null ? 'Choose a gap' : 'Move it or lock in';
-  } else if (state.can.place_challenge) {
-    interactiveAction = 'place_challenge';
-    help = round.challenge_placement === null ? 'Choose a rival gap' : 'Move it or lock challenge';
-  } else if (round.phase === 'challenge') {
-    help = challenger
-      ? `${challenger.name} holds the challenge`
-      : round.viewer_passed
-        ? `You passed · ${round.challenge_pass_count}/${round.challenge_pass_total} rivals decided`
-        : 'Waiting for first challenge';
-  }
-
-  setText('#timeline-kicker', timelineKicker);
-  setText('#timeline-owner', timelineOwner);
-  setText('#timeline-help', help);
-  timeline.innerHTML = renderTimeline(songs, {
-    placement,
-    challengePlacement,
-    interactive: Boolean(interactiveAction),
-    challenge: interactiveAction === 'place_challenge',
-    reveal: buildRevealTimeline(round),
-  });
-  bindTimeline(interactiveAction);
-  if (!revealed) {
-    const focusedGap = timeline.querySelector('.timeline-gap.is-challenged')
-      || timeline.querySelector('.timeline-gap.is-selected');
-    window.requestAnimationFrame(() => {
-      const isScrollable = timeline.scrollHeight > timeline.clientHeight + 1;
-      timeline.classList.toggle('is-scrollable', isScrollable);
-      if (focusedGap) {
-        focusedGap.scrollIntoView({ block: 'center', inline: 'nearest' });
-      } else if (isScrollable) {
-        timeline.scrollTop = Math.max(0, (timeline.scrollHeight - timeline.clientHeight) / 2);
+  const canPlace = state.can.place;
+  const canChallengePlace = state.can.placeChallenge;
+  const reveal = revealPlacement(round);
+  renderTimeline(elements.timeline, state.activeTimeline, {
+    placement: selectedPlacement ?? round.placement,
+    challengePlacement: selectedChallengePlacement ?? round.challengePlacement,
+    interactive: canPlace || canChallengePlace,
+    challenge: canChallengePlace,
+    ...reveal,
+    onSelect: (slot) => {
+      if (canPlace) {
+        selectedPlacement = slot;
+        void act({ type: "place", teamId: state.viewer.teamId, slot });
+      } else {
+        selectedChallengePlacement = slot;
+        void act({ type: "place_challenge", teamId: state.viewer.teamId, slot });
       }
-    });
-  }
-  if (revealed) {
-    help = round.outcome === 'active_won' || round.outcome === 'challenge_won'
-      ? `Correct · gap ${round.correct_placement + 1}`
-      : `Moving to gap ${round.correct_placement + 1}`;
-    setText('#timeline-help', help);
-    animateRevealPlacement(timeline);
-  }
+    },
+  });
 
-  if (state.can.lock_placement) {
-    configureMainButton('lock_placement', 'Lock in position');
-    setText('#team-action-copy', `Gap ${round.placement + 1} selected · this cannot be moved after locking`);
-  } else if (state.can.place && round.placement === null) {
-    configureMainButton('', 'Choose a position', true);
-    setText('#team-action-copy', 'Listen to the song, then place the mystery card');
-  } else if (state.can.claim_challenge) {
-    configureMainButton('claim_challenge', 'Challenge for 1 token');
-    setText('#team-action-copy', 'Only the first rival team can claim · passing cannot be undone');
-  } else if (state.can.pass_challenge) {
-    configureMainButton('', 'No tokens to challenge', true);
-    setText('#team-action-copy', 'Pass to close the challenge window');
-  } else if (state.can.lock_challenge) {
-    configureMainButton('lock_challenge', 'Lock challenge');
-    setText('#team-action-copy', `Your token is spent · gap ${round.challenge_placement + 1} selected`);
-  } else if (state.can.place_challenge) {
-    configureMainButton('', 'Choose rival position', true);
-    setText('#team-action-copy', 'Choose a different gap from the active team');
-  } else if (state.can.reveal) {
-    configureMainButton('reveal', 'Flip & reveal');
-    setText('#team-action-copy', 'Tap the card or button to settle the round');
-  } else {
-    configureMainButton('', round.phase === 'revealed' ? 'Waiting for host' : 'Waiting…', true);
-    setText('#team-action-copy', round.phase === 'revealed' ? 'The host will start the next round' : 'Game state will update automatically');
-  }
-
-  renderResult(round, activeTeam, challenger);
+  elements["placement-help"].textContent = copy;
+  elements["buy-card"].hidden = !state.can.buyRandomCard;
+  elements["replace-song"].hidden = !state.can.replaceSong;
+  elements["lock-placement"].hidden = !state.can.lockPlacement;
+  elements.contest.hidden = !state.can.contest;
+  elements.pass.hidden = !state.can.passChallenge;
+  elements["lock-challenge"].hidden = !state.can.lockChallenge;
+  elements["game-teams"].replaceChildren(...state.teams.map(teamRow));
+  updateTimer();
 }
 
 function renderFinished() {
-  const team = viewerTeam();
-  const winner = teamById(state, state.room.winner_team_id);
-  const viewerWon = winner?.id === team.id;
-  loading.hidden = true;
-  lobby.hidden = true;
-  game.hidden = true;
-  finished.hidden = false;
-  resultBanner.hidden = true;
-  hostModeButton.hidden = true;
-  setText('#team-name', team.name);
-  setText('#team-token-count', team.tokens);
-  setText('#team-status', 'Game over');
-  setText('#team-finished-kicker', viewerWon ? 'YOU WIN' : 'FINAL SCORE');
-  setText('#team-finished-title', winner ? `${winner.name} wins.` : 'The deck is complete.');
-  setText(
-    '#team-finished-copy',
-    viewerWon
-      ? `Your timeline reached ${winner.card_count} cards.`
-      : winner
-        ? `Your team finished with ${team.card_count} cards.`
-        : 'No team reached the target before the final song.',
-  );
-  const standings = [...state.teams].sort((left, right) => right.card_count - left.card_count || right.tokens - left.tokens);
-  document.querySelector('#team-final-standings').innerHTML = standings.map((standing, index) => `
-    <div class="final-standing ${standing.id === state.room.winner_team_id ? 'is-winner' : ''} ${standing.id === team.id ? 'is-viewer' : ''}">
-      <span>${String(index + 1).padStart(2, '0')}</span>
-      <strong>${escapeHtml(standing.name)}</strong>
-      <small>${standing.card_count} cards</small>
-    </div>`).join('');
+  setSection("finished");
+  const winner = teamById(state, state.room.winnerTeamId);
+  elements["result-title"].textContent = winner ? `${winner.name} wins.` : "Game complete.";
+  elements["result-copy"].textContent = winner ? `${winner.cardCount} cards completed their timeline.` : "The deck is complete.";
+  const teams = [...state.teams].sort((a, b) => b.cardCount - a.cardCount || b.tokens - a.tokens);
+  elements.standings.replaceChildren(...teams.map((team, index) => {
+    const row = document.createElement("div");
+    row.className = `standing${team.id === state.room.winnerTeamId ? " is-winner" : ""}`;
+    const rank = document.createElement("span");
+    rank.textContent = String(index + 1).padStart(2, "0");
+    const name = document.createElement("strong");
+    name.textContent = team.name;
+    const score = document.createElement("small");
+    score.textContent = `${team.cardCount} cards · ${team.tokens} tokens`;
+    row.append(rank, name, score);
+    return row;
+  }));
 }
 
 function render() {
+  elements["header-room"].textContent = room || "----";
   if (!state) return;
-  if (state.room.status === 'finished') renderFinished();
-  else if (state.room.status === 'lobby') renderLobby();
-  else renderGame();
+  if (state.room.status === "lobby") renderLobby();
+  else if (state.room.status === "playing") renderGame();
+  else renderFinished();
 }
 
-async function refreshState() {
+async function refresh() {
   try {
-    const fresh = await request(`/api/rooms/${encodeURIComponent(room)}/state`, { token });
-    if (fresh.room.revision !== lastRevision) {
-      state = fresh;
-      lastRevision = state.room.revision;
-      render();
-    }
+    const next = await api(`/api/rooms/${encodeURIComponent(room)}/state`);
+    acceptSnapshot(next);
   } catch (error) {
-    if (error.status === 401 || error.status === 404) {
-      toast(error.message);
-      window.setTimeout(() => window.location.assign(`/?room=${encodeURIComponent(room)}`), 1200);
-    }
+    toast(error.message);
+    if ([401, 404].includes(error.status)) window.setTimeout(() => window.location.assign("/"), 1200);
   }
 }
 
-function gapAtPoint(x, y) {
-  return [...timeline.querySelectorAll('.timeline-gap:not(:disabled)')].find(gap => {
-    const rect = gap.getBoundingClientRect();
-    return x >= rect.left - 16 && x <= rect.right + 16 && y >= rect.top - 16 && y <= rect.bottom + 16;
-  });
-}
-
-function startDrag(event) {
-  const canDrag = state?.can?.place || state?.can?.place_challenge;
-  if (!canDrag || (event.pointerType === 'mouse' && event.button !== 0)) return;
-  dragging = true;
-  pointerId = event.pointerId;
-  mysteryCard.setPointerCapture?.(pointerId);
-  mysteryCard.classList.add('is-dragging');
-  ghost.classList.add('is-visible');
-  moveDrag(event);
-  event.preventDefault();
-}
-
-function moveDrag(event) {
-  if (!dragging || event.pointerId !== pointerId) return;
-  ghost.style.left = `${event.clientX}px`;
-  ghost.style.top = `${event.clientY}px`;
-  const target = gapAtPoint(event.clientX, event.clientY);
-  timeline.querySelectorAll('.timeline-gap').forEach(gap => gap.classList.toggle('is-hovered', gap === target));
-  event.preventDefault();
-}
-
-function endDrag(event) {
-  if (!dragging || event.pointerId !== pointerId) return;
-  const target = gapAtPoint(event.clientX, event.clientY);
-  dragging = false;
-  pointerId = null;
-  mysteryCard.classList.remove('is-dragging');
-  ghost.classList.remove('is-visible');
-  timeline.querySelectorAll('.timeline-gap').forEach(gap => gap.classList.remove('is-hovered'));
-  if (target) {
-    const action = state?.can?.place_challenge ? 'place_challenge' : 'place';
-    act(action, { slot: Number(target.dataset.slot) });
+function acceptSnapshot(next) {
+  if (next.room.revision < highestSeenRevision || next.room.revision < (state?.room.revision ?? -1)) {
+    return false;
   }
-  event.preventDefault();
+  highestSeenRevision = Math.max(highestSeenRevision, next.room.revision);
+  if (state && next.room.revision === state.room.revision) return false;
+  state = next;
+  selectedPlacement = state.round?.placement ?? null;
+  selectedChallengePlacement = state.round?.challengePlacement ?? null;
+  render();
+  return true;
 }
 
-mainButton.addEventListener('click', () => {
-  if (actionMode) act(actionMode);
-});
-noChallengeButton.addEventListener('click', () => act('pass_challenge'));
-hostModeButton.addEventListener('click', () => {
-  if (!state?.viewer?.cohost_authorized) {
-    document.querySelector('#host-access-error').textContent = '';
-    hostAccessDialog.showModal();
-    document.querySelector('#host-control-code-input').focus();
+function updateTimer() {
+  if (!state?.round?.challengeDeadlineAt || state.round.phase !== "challenge") {
+    elements.timer.textContent = "";
     return;
   }
-  const seat = seatFromUrl();
-  const seatQuery = seat ? `&seat=${encodeURIComponent(seat)}` : '';
-  window.location.assign(`/host?room=${encodeURIComponent(room)}${seatQuery}&mode=team-host`);
-});
-hostAccessForm.addEventListener('submit', async event => {
-  event.preventDefault();
-  const codeInput = document.querySelector('#host-control-code-input');
-  const errorElement = document.querySelector('#host-access-error');
-  errorElement.textContent = '';
-  try {
-    state = await gameAction(room, token, 'authorize_cohost', { control_code: codeInput.value });
-    lastRevision = state.room.revision;
-    hostAccessDialog.close();
-    const seat = seatFromUrl();
-    const seatQuery = seat ? `&seat=${encodeURIComponent(seat)}` : '';
-    window.location.assign(`/host?room=${encodeURIComponent(room)}${seatQuery}&mode=team-host`);
-  } catch (error) {
-    errorElement.textContent = error.message;
-    codeInput.select();
-  }
-});
-hostAccessDialog.querySelector('[data-close-dialog]').addEventListener('click', () => hostAccessDialog.close());
-mysteryCard.addEventListener('click', () => {
-  if (state?.can?.reveal) act('reveal');
-});
-mysteryCard.addEventListener('keydown', event => {
-  if (!state?.can?.reveal || !['Enter', ' '].includes(event.key)) return;
-  event.preventDefault();
-  act('reveal');
-});
-mysteryCard.addEventListener('pointerdown', startDrag);
-mysteryCard.addEventListener('pointermove', moveDrag);
-mysteryCard.addEventListener('pointerup', endDrag);
-mysteryCard.addEventListener('pointercancel', endDrag);
-
-if (!room || !token || !viewerTeamId) {
-  window.location.replace(`/?room=${encodeURIComponent(room)}`);
-} else {
-  startPolling(refreshState);
+  elements.timer.textContent = `${formatTimer(state.round.challengeDeadlineAt)}s`;
 }
+
+elements.ready.addEventListener("click", () => void act({ type: "set_ready", teamId: state.viewer.teamId, ready: !self().ready }));
+elements["buy-card"].addEventListener("click", () => void act({ type: "buy_random_card", teamId: state.viewer.teamId }));
+elements["replace-song"].addEventListener("click", () => {
+  if (window.confirm("Spend one token and discard this song?")) void act({ type: "replace_song", teamId: state.viewer.teamId });
+});
+elements["lock-placement"].addEventListener("click", () => void act({ type: "lock_placement", teamId: state.viewer.teamId }));
+elements.contest.addEventListener("click", () => void act({ type: "contest", teamId: state.viewer.teamId }));
+elements.pass.addEventListener("click", () => void act({ type: "pass_challenge", teamId: state.viewer.teamId }));
+elements["lock-challenge"].addEventListener("click", () => void act({ type: "lock_challenge", teamId: state.viewer.teamId }));
+
+async function start() {
+  if (!room) {
+    window.location.replace("/");
+    return;
+  }
+  await refresh();
+  if (!state) return;
+  stopUpdates = createRoomUpdates(room, {
+    onRevision: refresh,
+    onStatus: (status) => {
+      elements.connection.textContent = status === "live" ? "Live" : "Reconnecting";
+    },
+  });
+  timerHandle = window.setInterval(updateTimer, 250);
+}
+
+window.addEventListener("pagehide", () => {
+  stopUpdates?.();
+  if (timerHandle !== null) window.clearInterval(timerHandle);
+});
+void start();

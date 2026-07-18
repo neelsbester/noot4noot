@@ -1,78 +1,125 @@
-import { request, roomFromUrl, saveSession } from './shared.js';
+import { api, createToast, randomToken, requestId } from "./shared.js";
 
-// Spotify only permits an HTTP loopback IP literal, not http://localhost.
-// Normalize before a host room is created so OAuth and browser storage share an origin.
-if (window.location.hostname === 'localhost') {
-  const port = window.location.port ? `:${window.location.port}` : '';
-  window.location.replace(`http://127.0.0.1${port}${window.location.pathname}${window.location.search}${window.location.hash}`);
+const toast = createToast();
+const loading = document.querySelector("#invite-loading");
+const required = document.querySelector("#invite-required");
+const entry = document.querySelector("#game-entry");
+const roomInput = document.querySelector("#room-code");
+const joinTab = document.querySelector("#join-tab");
+const createTab = document.querySelector("#create-tab");
+const joinPanel = document.querySelector("#join-panel");
+const createPanel = document.querySelector("#create-panel");
+
+function selectTab(tab) {
+  const joining = tab === "join";
+  joinTab.setAttribute("aria-selected", String(joining));
+  createTab.setAttribute("aria-selected", String(!joining));
+  joinPanel.hidden = !joining;
+  createPanel.hidden = joining;
+  joinTab.classList.toggle("is-active", joining);
+  createTab.classList.toggle("is-active", !joining);
+  (joining ? roomInput : document.querySelector("#deck-select")).focus();
 }
 
-const joinTab = document.querySelector('#join-tab');
-const hostTab = document.querySelector('#host-tab');
-const joinForm = document.querySelector('#join-form');
-const hostForm = document.querySelector('#host-form');
-const roomInput = document.querySelector('#room-code');
-const teamNameInput = document.querySelector('#team-name');
-const createRoomButton = document.querySelector('#create-room-button');
-const errorElement = document.querySelector('#entry-error');
-const testLabLink = document.querySelector('#test-lab-link');
+joinTab.addEventListener("click", () => selectTab("join"));
+createTab.addEventListener("click", () => selectTab("create"));
 
-if (['localhost', '127.0.0.1'].includes(window.location.hostname)) testLabLink.hidden = false;
-
-function showMode(mode) {
-  const joining = mode === 'join';
-  joinTab.classList.toggle('is-active', joining);
-  hostTab.classList.toggle('is-active', !joining);
-  joinTab.setAttribute('aria-selected', String(joining));
-  hostTab.setAttribute('aria-selected', String(!joining));
-  joinTab.tabIndex = joining ? 0 : -1;
-  hostTab.tabIndex = joining ? -1 : 0;
-  joinForm.hidden = !joining;
-  hostForm.hidden = joining;
-  errorElement.textContent = '';
-}
-
-joinTab.addEventListener('click', () => showMode('join'));
-hostTab.addEventListener('click', () => showMode('host'));
-document.querySelector('.entry-tabs').addEventListener('keydown', event => {
-  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
-  const showHost = event.key === 'ArrowRight' || event.key === 'End';
-  showMode(showHost ? 'host' : 'join');
-  (showHost ? hostTab : joinTab).focus();
-  event.preventDefault();
+roomInput.addEventListener("input", () => {
+  roomInput.value = roomInput.value.toUpperCase().replace(/[^A-HJ-NP-Z2-9]/gu, "").slice(0, 4);
 });
 
-joinForm.addEventListener('submit', async event => {
+joinPanel.addEventListener("submit", async (event) => {
   event.preventDefault();
-  errorElement.textContent = '';
-  const room = roomInput.value.trim().toUpperCase();
+  const button = joinPanel.querySelector("button[type=submit]");
+  button.disabled = true;
   try {
-    const session = await request(`/api/rooms/${encodeURIComponent(room)}/teams`, {
-      method: 'POST',
-      body: { name: teamNameInput.value },
+    const code = roomInput.value.trim().toUpperCase();
+    const result = await api(`/api/rooms/${encodeURIComponent(code)}/teams`, {
+      method: "POST",
+      body: {
+        name: document.querySelector("#team-name").value,
+        teamToken: randomToken(),
+        requestId: requestId(),
+      },
     });
-    saveSession('team', room, session.token, session.team_id);
-    window.location.href = `/team?room=${encodeURIComponent(room)}`;
+    window.location.assign(`/team?room=${encodeURIComponent(result.room.code)}`);
   } catch (error) {
-    errorElement.textContent = error.message;
+    toast(error.message);
+    button.disabled = false;
   }
 });
 
-createRoomButton.addEventListener('click', async () => {
-  createRoomButton.disabled = true;
-  errorElement.textContent = '';
+createPanel.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const button = createPanel.querySelector("button[type=submit]");
+  button.disabled = true;
   try {
-    const session = await request('/api/rooms', { method: 'POST', body: {} });
-    saveSession('host', session.code, session.token);
-    window.location.href = `/host?room=${encodeURIComponent(session.code)}`;
+    const result = await api("/api/rooms", {
+      method: "POST",
+      body: {
+        hostToken: randomToken(),
+        requestId: requestId(),
+        settings: {
+          deckId: document.querySelector("#deck-select").value,
+          targetCards: Number(document.querySelector("#target-cards").value),
+          startingTokens: Number(document.querySelector("#starting-tokens").value),
+          challengeTimerSeconds: Number(document.querySelector("#challenge-timer").value),
+          titleArtistBonus: document.querySelector("#title-bonus").checked,
+        },
+      },
+    });
+    window.location.assign(`/host?room=${encodeURIComponent(result.room.code)}`);
   } catch (error) {
-    errorElement.textContent = error.message;
-    createRoomButton.disabled = false;
+    toast(error.message);
+    button.disabled = false;
   }
 });
 
-const linkedRoom = roomFromUrl();
-if (linkedRoom) {
-  roomInput.value = linkedRoom;
-  teamNameInput.focus();
+async function initialize() {
+  const url = new URL(window.location.href);
+  const inviteToken = url.searchParams.get("invite");
+  const requestedRoom = url.searchParams.get("room");
+  if (inviteToken) {
+    url.searchParams.delete("invite");
+    window.history.replaceState({}, document.title, `${url.pathname}${url.search}`);
+    try {
+      await api("/api/access/redeem", {
+        method: "POST",
+        body: { inviteToken },
+      });
+    } catch (error) {
+      showRequired();
+      toast(error.message);
+      return;
+    }
+  }
+
+  try {
+    const [config] = await Promise.all([api("/api/config"), api("/api/access")]);
+    const deckSelect = document.querySelector("#deck-select");
+    deckSelect.replaceChildren(...config.decks.map((deck) => {
+      const option = document.createElement("option");
+      option.value = deck.id;
+      option.textContent = `${deck.name} · ${deck.songCount} songs`;
+      return option;
+    }));
+    if (requestedRoom) {
+      roomInput.value = requestedRoom.toUpperCase().slice(0, 4);
+      selectTab("join");
+    }
+    loading.hidden = true;
+    required.hidden = true;
+    entry.hidden = false;
+    document.querySelector("#access-mark").textContent = "Invite active";
+  } catch {
+    showRequired();
+  }
 }
+
+function showRequired() {
+  loading.hidden = true;
+  entry.hidden = true;
+  required.hidden = false;
+}
+
+await initialize();

@@ -95,7 +95,7 @@ async function route(
     return response;
   }
 
-  if (path === "/admin" || path === "/admin/") {
+  if (path === "/admin" || path === "/admin/" || path === "/admin.html") {
     await requireAdmin(request, env);
     return serveAsset(request, env, "/admin.html");
   }
@@ -370,8 +370,6 @@ function servePage(request: Request, env: CloudflareEnv, path: string): Promise<
     "/callback": "/host.html",
     "/team": "/team.html",
     "/team/": "/team.html",
-    "/test-lab": "/test-lab.html",
-    "/test-lab/": "/test-lab.html",
   };
   return serveAsset(request, env, pages[path] ?? path);
 }

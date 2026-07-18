@@ -1,21 +1,19 @@
 import {
-  animateRevealPlacement,
-  buildRevealTimeline,
+  api,
+  controllerModeFromUrl,
+  copyText,
+  createRoomUpdates,
   createToast,
-  decadeClass,
-  escapeHtml,
-  gameAction,
-  loadSession,
+  formatTimer,
+  performAction,
   renderTimeline,
-  request,
+  revealPlacement,
   roomFromUrl,
-  saveSession,
-  seatFromUrl,
-  startPolling,
   teamById,
-} from './shared.js';
+} from "./shared.js";
 import {
   beginSpotifyLogin,
+  clearSpotifySession,
   configureSpotify,
   getSpotifyDevices,
   getSpotifyToken,
@@ -24,389 +22,387 @@ import {
   pauseSpotifyPlayback,
   playSpotifyTrack,
   saveSpotifyDevice,
-} from './spotify.js';
-import { createBrowserSpotifyPlayer } from './spotify-browser-player.js';
+} from "./spotify.js";
+import { createBrowserSpotifyPlayer } from "./spotify-browser-player.js";
 
-const loading = document.querySelector('#host-loading');
-const lobby = document.querySelector('#host-lobby');
-const game = document.querySelector('#host-game');
-const finished = document.querySelector('#host-finished');
-const toast = createToast(document.querySelector('#toast'));
-
-let room = '';
-let token = '';
-let config = null;
+const elements = Object.fromEntries(
+  [...document.querySelectorAll("[id]")].map((element) => [element.id, element]),
+);
+const toast = createToast(elements.toast);
+let room = roomFromUrl();
+const controllerMode = controllerModeFromUrl();
 let state = null;
-let lastRevision = -1;
+let stopUpdates = null;
+let timerHandle = null;
+let spotifyPlayer = null;
+let browserDeviceId = "";
 let spotifyConnected = false;
-let browserPlayer = null;
-let browserDeviceId = '';
-let playbackCommandInFlight = false;
+let playbackBusy = false;
+let highestSeenRevision = -1;
 
-function isTeamHostMode() {
-  return new URLSearchParams(window.location.search).get('mode') === 'team-host';
-}
-
-function sessionRole() {
-  return isTeamHostMode() ? 'team' : 'host';
-}
-
-function normalizeHostLoopbackOrigin() {
-  const currentRoom = roomFromUrl();
-  if (window.location.hostname === 'localhost') {
-    const port = window.location.port ? `:${window.location.port}` : '';
-    const target = new URL(`http://127.0.0.1${port}${window.location.pathname}${window.location.search}`);
-    const session = loadSession(sessionRole(), currentRoom);
-    if (session?.token) target.hash = `mode_session=${encodeURIComponent(JSON.stringify(session))}`;
-    window.location.replace(target.toString());
-    return true;
+function setSection(name) {
+  for (const section of ["loading", "lobby", "game", "finished"]) {
+    elements[section].hidden = section !== name;
   }
-
-  const fragment = new URLSearchParams(window.location.hash.slice(1));
-  const migration = fragment.get('mode_session') || fragment.get('host_session');
-  if (currentRoom && migration) {
-    try {
-      const session = JSON.parse(migration);
-      if (session?.token) saveSession(sessionRole(), currentRoom, session.token, session.teamId || '');
-    } catch {
-      // An invalid migration fragment is ignored and normal session validation handles it.
-    }
-    window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}`);
-  }
-  return false;
 }
 
-const changingOrigin = normalizeHostLoopbackOrigin();
-
-function configureModeUi() {
-  const teamHostMode = isTeamHostMode();
-  document.body.classList.toggle('is-team-host', teamHostMode);
-  document.querySelector('#back-to-team-button').hidden = !teamHostMode;
-  setText('#host-mode-label', teamHostMode ? 'TEAM HOSTING' : 'HOST TABLE');
+function currentDevice() {
+  return elements["spotify-device"].value || "";
 }
 
-function setText(selector, value) {
-  const element = document.querySelector(selector);
-  if (element) element.textContent = value;
-}
-
-async function act(action, payload = {}) {
+async function act(action) {
+  if (!state) return;
   try {
-    state = await gameAction(room, token, action, payload, { hostMode: isTeamHostMode() });
-    lastRevision = state.room.revision;
-    render();
+    const next = await performAction(room, state, action, controllerMode);
+    await acceptSnapshot(next);
     return true;
   } catch (error) {
+    await refresh();
     toast(error.message);
     return false;
   }
 }
 
-function renderLobby() {
-  loading.hidden = true;
-  lobby.hidden = false;
-  game.hidden = true;
-  finished.hidden = true;
-  setText('#header-room-code', room);
-  setText('#lobby-room-code', room);
-  document.querySelector('#lobby-control-code-card').hidden = !state.room.control_code;
-  setText('#lobby-control-code', state.room.control_code || '');
-  setText('#lobby-team-count', `${state.teams.length} / 2 minimum`);
-  const joinUrl = `${config?.lan_url || window.location.origin}/?room=${encodeURIComponent(room)}`;
-  setText('#join-url', joinUrl);
-
-  const list = document.querySelector('#lobby-team-list');
-  list.innerHTML = state.teams.length
-    ? state.teams.map((team, index) => `<div class="lobby-team"><span>${index + 1}</span><strong>${escapeHtml(team.name)}</strong><i>READY</i></div>`).join('')
-    : '<div class="empty-team"><span>+</span><p>Waiting for the first team…</p></div>';
-  document.querySelector('#start-game-button').disabled = !state.can.start_game;
-}
-
-function phaseCopy(round, activeTeam, challenger) {
-  if (round.phase === 'placement') return [`${activeTeam.name} is placing`, 'The active team is deciding where the card belongs.'];
-  if (round.phase === 'challenge' && !challenger) return ['Challenge window open', 'The first rival team to spend a token claims the challenge.'];
-  if (round.phase === 'challenge') return [`${challenger.name} challenged`, 'Waiting for the challenger to choose and lock another gap.'];
-  if (round.phase === 'reveal_ready') return ['Both answers are locked', 'The card can now be flipped to settle the round.'];
-  if (round.phase === 'revealed') {
-    if (round.outcome === 'active_won') return [`${activeTeam.name} got it`, 'The card has been added to their timeline.'];
-    if (round.outcome === 'challenge_won') return [`${challenger?.name || 'The challenger'} stole it`, 'The challenge was correct and the card changes hands.'];
-    return ['Nobody had it', 'The card is out of play.'];
+function makeTeamRow(team, removable = false) {
+  const row = document.createElement("div");
+  row.className = `team-row${team.isActive ? " is-active" : ""}`;
+  const initial = document.createElement("span");
+  initial.className = "team-initial";
+  initial.textContent = team.name.slice(0, 1).toUpperCase();
+  const main = document.createElement("div");
+  main.className = "team-row-main";
+  const name = document.createElement("strong");
+  name.textContent = team.name;
+  const detail = document.createElement("small");
+  detail.textContent = state.room.status === "lobby"
+    ? (team.ready ? "Ready to play" : "Not ready yet")
+    : `${team.cardCount} / ${state.room.settings.targetCards} cards · ${team.tokens} tokens`;
+  main.append(name, detail);
+  row.append(initial, main);
+  if (state.room.status === "lobby") {
+    const ready = document.createElement("span");
+    ready.className = team.ready ? "ready" : "ready not-ready";
+    ready.textContent = team.ready ? "READY" : "WAITING";
+    row.append(ready);
   }
-  return ['Round in progress', ''];
+  if (removable && state.can.removeTeam) {
+    const remove = document.createElement("button");
+    remove.className = "button compact danger";
+    remove.type = "button";
+    remove.textContent = "Remove";
+    remove.addEventListener("click", () => {
+      if (window.confirm(`Remove ${team.name} from this game?`)) {
+        void act({ type: "remove_team", teamId: team.id });
+      }
+    });
+    row.append(remove);
+  }
+  return row;
 }
 
-function renderHostTeams() {
-  const list = document.querySelector('#host-team-list');
-  list.innerHTML = state.teams.map(team => `
-    <article class="host-team-card ${team.is_active ? 'is-active' : ''}">
-      <div class="host-team-title"><span>${escapeHtml(team.name.slice(0, 1).toUpperCase())}</span><div><strong>${escapeHtml(team.name)}</strong><small>${team.card_count} / ${state.room.target_cards} cards</small></div><output>${team.tokens}</output></div>
-      <div class="host-token-actions">
-        <button type="button" data-adjust-team="${team.id}" data-delta="-1" aria-label="Remove token">−</button>
-        <button class="award" type="button" data-adjust-team="${team.id}" data-delta="1">Title + artist <b>+1</b></button>
-        <button type="button" data-adjust-team="${team.id}" data-delta="1" aria-label="Add token" ${team.tokens >= 5 ? 'disabled' : ''}>+</button>
-        <button class="buy" type="button" data-buy-team="${team.id}" ${team.tokens < 3 ? 'disabled' : ''}>Random card <b>−3</b></button>
-      </div>
-    </article>`).join('');
+function renderTeamList(container, removable) {
+  container.replaceChildren(...state.teams.map((team) => makeTeamRow(team, removable)));
+}
+
+function renderLobby() {
+  setSection("lobby");
+  elements["room-code"].textContent = room;
+  elements["team-count"].textContent = `${state.teams.length} / 2 minimum`;
+  const joinUrl = `${window.location.origin}/?room=${encodeURIComponent(room)}`;
+  elements["join-url"].textContent = joinUrl;
+  renderTeamList(elements["lobby-teams"], true);
+  elements["start-game"].disabled = !state.can.startGame;
+  elements["lobby-help"].textContent = state.teams.length < 2
+    ? "At least two teams must join."
+    : state.teams.every((team) => team.ready)
+      ? "Everyone is ready. Start when the room is settled."
+      : "Waiting for every team to mark themselves ready.";
+}
+
+function roundCopy(round, active, challenger) {
+  if (round.phase === "turn_start") return ["Ready when you are.", "The active team can buy a card before you start this song."];
+  if (round.phase === "placement") return [`${active?.name || "The active team"} is placing.`, "Keep the song playing while they choose a position."];
+  if (round.phase === "challenge" && challenger) return [`${challenger.name} is contesting.`, "They must select and lock a different position."];
+  if (round.phase === "challenge") return ["Contest window open.", "Rival teams may contest or pass. You can force the reveal at any time."];
+  if (round.outcome === "active_won") return [`${active?.name || "The active team"} placed it.`, "The card joins their timeline."];
+  if (round.outcome === "challenge_won") return [`${challenger?.name || "The challenger"} stole it.`, "Their contest position was correct."];
+  return ["No card this round.", "Neither locked position was correct."];
 }
 
 function renderGame() {
-  loading.hidden = true;
-  lobby.hidden = true;
-  game.hidden = false;
-  finished.hidden = true;
+  setSection("game");
   const round = state.round;
-  const activeTeam = teamById(state, round.active_team_id);
-  const challenger = teamById(state, round.challenge_team_id);
-  const [title, copy] = phaseCopy(round, activeTeam, challenger);
-
-  setText('#header-room-code', room);
-  const controlCodeCard = document.querySelector('#host-control-code-card');
-  controlCodeCard.hidden = !state.room.control_code;
-  setText('#host-control-code', state.room.control_code || '');
-  setText('#host-round-number', String(round.number).padStart(2, '0'));
-  setText('#host-active-team', activeTeam?.name || '—');
-  setText('#host-phase', round.phase.replace('_', ' ').toUpperCase());
-  setText('#host-stage-title', title);
-  setText('#host-stage-copy', copy);
-  setText('#board-team-name', activeTeam?.name || '—');
-
-  const revealed = round.phase === 'revealed';
-  const mysteryCard = document.querySelector('#host-mystery-card');
-  mysteryCard.classList.toggle('is-flipped', revealed);
+  const active = teamById(state, round.activeTeamId);
+  const challenger = teamById(state, round.challengeTeamId);
+  const revealed = round.phase === "revealed";
+  const [title, copy] = roundCopy(round, active, challenger);
+  elements["round-number"].textContent = String(round.number);
+  elements["active-team"].textContent = active?.name || "—";
+  elements.phase.textContent = round.phase.replaceAll("_", " ");
+  elements["stage-title"].textContent = title;
+  elements["stage-copy"].textContent = copy;
+  elements["timeline-team"].textContent = active?.name || "—";
+  elements.record.classList.toggle("revealed", revealed);
+  elements["song-meta"].hidden = !revealed;
   if (revealed) {
-    const song = round.song;
-    const revealFace = document.querySelector('#host-reveal-face');
-    revealFace.className = `mystery-front ${decadeClass(song.year)}`;
-    revealFace.innerHTML = `<strong>${escapeHtml(song.year)}</strong><span>${escapeHtml(song.title)}</span><small>${escapeHtml(song.artist)}</small>`;
+    elements["song-title"].textContent = round.song.title;
+    elements["song-artist"].textContent = round.song.artist;
+    elements["song-year"].textContent = String(round.song.year);
   }
-
-  const hostTimeline = document.querySelector('#host-timeline');
-  hostTimeline.innerHTML = renderTimeline(state.active_timeline, {
-    placement: revealed ? null : round.placement,
-    challengePlacement: revealed ? null : round.challenge_placement,
-    reveal: buildRevealTimeline(round),
+  const reveal = revealPlacement(round);
+  renderTimeline(elements.timeline, state.activeTimeline, {
+    placement: round.placement,
+    challengePlacement: round.challengePlacement,
+    ...reveal,
   });
-  if (revealed) animateRevealPlacement(hostTimeline);
+  elements["round-help"].textContent = copy;
+  elements["force-reveal"].hidden = !state.can.forceReveal;
+  elements["award-bonus"].hidden = !state.can.awardTitleArtistBonus;
+  elements["next-round"].hidden = !state.can.nextRound;
+  renderTeamList(elements["game-teams"], true);
 
-  const boardStatus = revealed
-    ? round.outcome === 'active_won' || round.outcome === 'challenge_won'
-      ? `Correct placement · gap ${round.correct_placement + 1}`
-      : `Should have been gap ${round.correct_placement + 1}`
-    : round.challenge_team_id
-      ? `${challenger?.name || 'A rival'} challenged`
-      : round.placement === null ? 'Waiting for their choice' : `Gap ${round.placement + 1} selected`;
-  setText('#board-status', boardStatus);
-
-  const closeChallenge = document.querySelector('#close-challenge-button');
-  const revealButton = document.querySelector('#host-reveal-button');
-  const nextButton = document.querySelector('#next-round-button');
-  const skipButton = document.querySelector('#skip-song-button');
-  closeChallenge.hidden = !state.can.close_challenge;
-  revealButton.hidden = !state.can.reveal;
-  nextButton.hidden = !state.can.next_round;
-  skipButton.hidden = !state.can.skip_song;
-
-  let actionCopy = 'Waiting for the active team…';
-  if (state.can.close_challenge) actionCopy = 'No rival has challenged yet.';
-  if (round.phase === 'challenge' && challenger) actionCopy = `${challenger.name} holds the challenge.`;
-  if (state.can.reveal) actionCopy = 'Ready for the big reveal.';
-  if (state.can.next_round) actionCopy = state.room.status === 'finished' ? 'A team reached the winning total.' : 'Round complete.';
-  setText('#host-action-copy', actionCopy);
-
-  let challengeText = 'Not open yet';
-  if (round.phase === 'challenge' && !challenger) challengeText = `Open · ${round.challenge_pass_count}/${round.challenge_pass_total} rivals passed`;
-  if (round.phase === 'challenge' && challenger) challengeText = `${challenger.name} spent 1 token`;
-  if (round.phase === 'reveal_ready' && challenger) challengeText = `${challenger.name} locked a rival position`;
-  if (revealed && round.outcome === 'challenge_won') challengeText = `${challenger?.name} won and stole the card`;
-  if (revealed && challenger && round.outcome !== 'challenge_won') challengeText = `${challenger.name} lost the challenge token`;
-  if (revealed && !challenger) challengeText = 'No challenge this round';
-  setText('#challenge-status-copy', challengeText);
-  renderHostTeams();
-
-  const spotifyUrl = round.song.spotify_url || '#';
-  const fallback = document.querySelector('#spotify-fallback-link');
-  fallback.href = spotifyUrl;
-  fallback.hidden = !round.song.spotify_url;
-  const selectedDevice = document.querySelector('#spotify-device-select').value;
-  document.querySelector('#play-song-button').disabled = playbackCommandInFlight || !spotifyConnected || !selectedDevice || !round.song.spotify_uri;
+  const playbackOwner = state.viewer.playbackOwner;
+  elements["spotify-box"].hidden = !playbackOwner;
+  elements["controller-note"].hidden = playbackOwner;
+  elements["back-to-team"].hidden = state.viewer.role !== "controller";
+  const songPlayable = "spotifyUri" in round.song && Boolean(round.song.spotifyUri);
+  elements["play-song"].disabled = playbackBusy || !spotifyConnected || !currentDevice() || !songPlayable;
+  elements["play-song"].textContent = round.playbackStarted ? "Play again" : "Play this song";
+  elements["pause-song"].disabled = playbackBusy || !spotifyConnected || !currentDevice();
+  elements["spotify-fallback"].hidden = !playbackOwner || !("spotifyUrl" in round.song) || !round.song.spotifyUrl;
+  if (!elements["spotify-fallback"].hidden) elements["spotify-fallback"].href = round.song.spotifyUrl;
+  updateTimer();
 }
 
 function renderFinished() {
-  loading.hidden = true;
-  lobby.hidden = true;
-  game.hidden = true;
-  finished.hidden = false;
-  setText('#header-room-code', room);
-
-  const winner = teamById(state, state.room.winner_team_id);
-  setText('#host-finished-title', winner ? `${winner.name} wins.` : 'The deck is complete.');
-  setText(
-    '#host-finished-copy',
-    winner
-      ? `${winner.card_count} cards made the winning timeline.`
-      : 'No team reached the target before the final song.',
-  );
-  const standings = [...state.teams].sort((left, right) => right.card_count - left.card_count || right.tokens - left.tokens);
-  document.querySelector('#host-final-standings').innerHTML = standings.map((team, index) => `
-    <div class="final-standing ${team.id === state.room.winner_team_id ? 'is-winner' : ''}">
-      <span>${String(index + 1).padStart(2, '0')}</span>
-      <strong>${escapeHtml(team.name)}</strong>
-      <small>${team.card_count} cards · ${team.tokens} tokens</small>
-    </div>`).join('');
+  setSection("finished");
+  const winner = teamById(state, state.room.winnerTeamId);
+  elements["result-title"].textContent = winner ? `${winner.name} wins.` : "Game complete.";
+  elements["result-copy"].textContent = winner
+    ? `${winner.cardCount} cards completed the winning timeline.`
+    : "The final song has been played.";
+  const teams = [...state.teams].sort((a, b) => b.cardCount - a.cardCount || b.tokens - a.tokens);
+  elements.standings.replaceChildren(...teams.map((team, index) => {
+    const row = document.createElement("div");
+    row.className = `standing${team.id === state.room.winnerTeamId ? " is-winner" : ""}`;
+    const rank = document.createElement("span");
+    rank.textContent = String(index + 1).padStart(2, "0");
+    const name = document.createElement("strong");
+    name.textContent = team.name;
+    const score = document.createElement("small");
+    score.textContent = `${team.cardCount} cards · ${team.tokens} tokens`;
+    row.append(rank, name, score);
+    return row;
+  }));
+  elements.rematch.hidden = !state.can.rematch;
 }
 
 function render() {
+  elements["header-room"].textContent = room || "----";
   if (!state) return;
-  if (state.room.status === 'finished') renderFinished();
-  else if (state.room.status === 'lobby') renderLobby();
-  else renderGame();
+  if (state.room.status === "lobby") renderLobby();
+  else if (state.room.status === "playing") renderGame();
+  else renderFinished();
 }
 
-async function refreshState() {
+async function pauseForStateTransition(next) {
+  if (!state?.viewer.playbackOwner || !spotifyConnected || !currentDevice()) return;
+  const oldRound = state.round;
+  const newRound = next.round;
+  const changed = oldRound && (
+    !newRound
+    || oldRound.number !== newRound.number
+    || oldRound.song.id !== newRound.song.id
+    || (state.room.status === "playing" && next.room.status !== "playing")
+  );
+  if (changed) {
+    try {
+      await pauseSpotifyPlayback(currentDevice());
+    } catch {
+      // The manual pause button remains available if Spotify was already idle.
+    }
+  }
+}
+
+async function refresh() {
+  if (!room) return;
   try {
-    const fresh = await request(`/api/rooms/${encodeURIComponent(room)}/state`, {
-      token,
-      hostMode: isTeamHostMode(),
-    });
-    if (fresh.room.revision !== lastRevision) {
-      state = fresh;
-      lastRevision = state.room.revision;
-      render();
-    }
+    const query = controllerMode ? "?mode=controller" : "";
+    const next = await api(`/api/rooms/${encodeURIComponent(room)}/state${query}`);
+    await acceptSnapshot(next);
   } catch (error) {
-    if (error.code === 'cohost_authorization_required' && isTeamHostMode()) {
-      toast(error.message);
-      const seat = seatFromUrl();
-      const seatQuery = seat ? `&seat=${encodeURIComponent(seat)}` : '';
-      window.setTimeout(() => window.location.assign(`/team?room=${encodeURIComponent(room)}${seatQuery}`), 900);
-      return;
-    }
-    if (error.status === 401 || error.status === 404) {
-      toast(error.message);
-      window.setTimeout(() => window.location.assign('/'), 1200);
-    }
+    toast(error.message);
+    if ([401, 404].includes(error.status)) window.setTimeout(() => window.location.assign("/"), 1200);
   }
 }
 
-async function refreshDevices() {
-  const devices = await getSpotifyDevices();
-  if (browserDeviceId && !devices.some(device => device.id === browserDeviceId)) {
-    devices.unshift({ id: browserDeviceId, name: 'This browser', type: 'Browser' });
+async function acceptSnapshot(next) {
+  if (next.room.revision < highestSeenRevision || next.room.revision < (state?.room.revision ?? -1)) {
+    return false;
   }
-  const select = document.querySelector('#spotify-device-select');
-  const saved = loadSpotifyDevice();
-  const selected = devices.some(device => device.id === saved)
-    ? saved
-    : browserDeviceId || (devices.length === 1 ? devices[0].id : '');
-  select.innerHTML = '<option value="">Choose device</option>' + devices.map(device => `<option value="${escapeHtml(device.id)}">${escapeHtml(device.name)} · ${escapeHtml(device.type)}</option>`).join('');
-  select.value = selected;
-  if (selected) saveSpotifyDevice(selected);
-  document.querySelector('#spotify-device-row').hidden = false;
-  spotifyConnected = true;
-  document.querySelector('#spotify-connect-button').textContent = 'Spotify connected';
-  if (!devices.length) toast('No output yet. Open Spotify on a device, or reconnect to enable browser audio.');
+  highestSeenRevision = Math.max(highestSeenRevision, next.room.revision);
+  if (state && next.room.revision === state.room.revision) return false;
+  await pauseForStateTransition(next);
+  if (next.room.revision < highestSeenRevision || next.room.revision < (state?.room.revision ?? -1)) {
+    return false;
+  }
+  state = next;
   render();
+  return true;
 }
 
-async function initializeBrowserPlayback() {
-  try {
-    browserPlayer = await createBrowserSpotifyPlayer({
-      getToken: getSpotifyToken,
-      onError: message => toast(message),
-    });
-    browserDeviceId = browserPlayer.deviceId;
-    await refreshDevices();
-  } catch (error) {
-    toast(`${error.message} You can still choose the Spotify app as an output.`);
+function updateTimer() {
+  if (!state?.round?.challengeDeadlineAt || state.round.phase !== "challenge") {
+    elements.timer.textContent = "";
+    return;
   }
+  elements.timer.textContent = `${formatTimer(state.round.challengeDeadlineAt)}s`;
+}
+
+async function loadDevices() {
+  const devices = await getSpotifyDevices();
+  if (browserDeviceId && !devices.some((device) => device.id === browserDeviceId)) {
+    devices.unshift({ id: browserDeviceId, name: "This browser", type: "Browser" });
+  }
+  const saved = loadSpotifyDevice();
+  const selected = devices.some((device) => device.id === saved)
+    ? saved
+    : browserDeviceId || devices[0]?.id || "";
+  elements["spotify-device"].replaceChildren(new Option("Choose playback device", ""));
+  for (const device of devices) {
+    elements["spotify-device"].add(new Option(`${device.name} · ${device.type}`, device.id));
+  }
+  elements["spotify-device"].value = selected;
+  if (selected) saveSpotifyDevice(selected);
+  elements["spotify-device-row"].hidden = false;
+  spotifyConnected = true;
+  elements["spotify-connect"].textContent = "Spotify connected";
+  elements["spotify-disconnect"].hidden = false;
+  render();
 }
 
 async function initializeSpotify() {
+  if (!state?.viewer.playbackOwner) return;
   try {
-    config = await configureSpotify();
-    const callbackToken = await handleSpotifyCallback();
-    room = roomFromUrl();
-    if (callbackToken || await getSpotifyToken()) {
-      await refreshDevices();
-      initializeBrowserPlayback();
-    }
+    await configureSpotify();
+    await handleSpotifyCallback();
+    const token = await getSpotifyToken();
+    if (!token) return;
+    spotifyPlayer = await createBrowserSpotifyPlayer({
+      getToken: getSpotifyToken,
+      onError: (message) => toast(message),
+    });
+    browserDeviceId = spotifyPlayer.deviceId;
+    await spotifyPlayer.activate();
+    await loadDevices();
   } catch (error) {
     toast(error.message);
+    if (await getSpotifyToken()) {
+      try {
+        await loadDevices();
+      } catch (deviceError) {
+        toast(deviceError.message);
+      }
+    }
   }
 }
 
-document.querySelector('#start-game-button').addEventListener('click', () => act('start_game'));
-document.querySelector('#close-challenge-button').addEventListener('click', () => act('close_challenge'));
-document.querySelector('#host-reveal-button').addEventListener('click', () => act('reveal'));
-document.querySelector('#next-round-button').addEventListener('click', () => act('next_round'));
-document.querySelector('#skip-song-button').addEventListener('click', async event => {
-  const button = event.currentTarget;
-  button.disabled = true;
-  const deviceId = document.querySelector('#spotify-device-select').value;
-  if (spotifyConnected && deviceId) await pauseSpotifyPlayback(deviceId).catch(() => {});
-  if (await act('skip_song')) toast('Song skipped · a new mystery card is ready');
-  button.disabled = false;
+elements["copy-join"].addEventListener("click", async () => {
+  await copyText(elements["join-url"].textContent);
+  toast("Room address copied.");
 });
-
-document.querySelector('#copy-join-url').addEventListener('click', async () => {
-  const value = document.querySelector('#join-url').textContent;
-  await navigator.clipboard.writeText(value).catch(() => {});
-  toast('Join address copied');
-});
-
-document.querySelector('#host-team-list').addEventListener('click', event => {
-  const adjust = event.target.closest('[data-adjust-team]');
-  const buy = event.target.closest('[data-buy-team]');
-  if (adjust) act('adjust_tokens', { team_id: adjust.dataset.adjustTeam, delta: Number(adjust.dataset.delta) });
-  if (buy) act('buy_random_card', { team_id: buy.dataset.buyTeam });
-});
-
-document.querySelector('#spotify-connect-button').addEventListener('click', () => {
-  if (window.self !== window.top) {
-    window.open(window.location.href, 'noot4noot-host');
-    toast('Host opened full-size for Spotify login');
-    return;
+elements["start-game"].addEventListener("click", () => void act({ type: "start_game" }));
+elements["force-reveal"].addEventListener("click", () => void act({ type: "force_reveal" }));
+elements["award-bonus"].addEventListener("click", () => void act({ type: "award_title_artist_bonus" }));
+elements["next-round"].addEventListener("click", () => void act({ type: "next_round" }));
+elements.rematch.addEventListener("click", () => void act({ type: "rematch" }));
+elements["back-to-team"].addEventListener("click", () => window.location.assign(`/team?room=${encodeURIComponent(room)}`));
+elements["spotify-connect"].addEventListener("click", () => void beginSpotifyLogin(room));
+elements["spotify-refresh"].addEventListener("click", async () => {
+  try {
+    await loadDevices();
+  } catch (error) {
+    toast(error.message);
   }
-  beginSpotifyLogin(room).catch(error => toast(error.message));
 });
-document.querySelector('#spotify-refresh-button').addEventListener('click', () => refreshDevices().catch(error => toast(error.message)));
-document.querySelector('#spotify-device-select').addEventListener('change', event => {
-  saveSpotifyDevice(event.target.value);
+elements["spotify-device"].addEventListener("change", () => {
+  saveSpotifyDevice(currentDevice());
   render();
 });
-document.querySelector('#back-to-team-button').addEventListener('click', () => {
-  const seat = seatFromUrl();
-  const seatQuery = seat ? `&seat=${encodeURIComponent(seat)}` : '';
-  window.location.assign(`/team?room=${encodeURIComponent(room)}${seatQuery}`);
+elements["spotify-disconnect"].addEventListener("click", () => {
+  spotifyPlayer?.disconnect();
+  spotifyPlayer = null;
+  browserDeviceId = "";
+  clearSpotifySession();
+  spotifyConnected = false;
+  elements["spotify-device-row"].hidden = true;
+  elements["spotify-disconnect"].hidden = true;
+  elements["spotify-connect"].textContent = "Connect Spotify";
+  render();
 });
-document.querySelector('#play-song-button').addEventListener('click', async () => {
-  if (playbackCommandInFlight) return;
-  playbackCommandInFlight = true;
+elements["play-song"].addEventListener("click", async () => {
+  if (!state?.round || !("spotifyUri" in state.round.song)) return;
+  playbackBusy = true;
   render();
   try {
-    const deviceId = document.querySelector('#spotify-device-select').value;
-    if (!deviceId) throw new Error('Choose a Spotify output first');
-    if (deviceId === browserDeviceId) await browserPlayer.activate();
-    await playSpotifyTrack(state.round.song.spotify_uri, deviceId);
-    toast('Mystery song is playing');
+    await spotifyPlayer?.activate();
+    await playSpotifyTrack(state.round.song.spotifyUri, currentDevice());
+    if (!state.round.playbackStarted) {
+      const started = await act({ type: "mark_playback_started" });
+      if (!started && state?.can.markPlaybackStarted) {
+        await act({ type: "mark_playback_started" });
+      }
+    }
   } catch (error) {
     toast(error.message);
   } finally {
-    playbackCommandInFlight = false;
+    playbackBusy = false;
+    render();
+  }
+});
+elements["pause-song"].addEventListener("click", async () => {
+  playbackBusy = true;
+  render();
+  try {
+    await pauseSpotifyPlayback(currentDevice());
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    playbackBusy = false;
     render();
   }
 });
 
-if (!changingOrigin) {
-  await initializeSpotify();
-  room = room || roomFromUrl();
-  configureModeUi();
-  const session = loadSession(sessionRole(), room);
-  if (!room || !session?.token) {
-    window.location.replace('/');
-  } else {
-    token = session.token;
-    setText('#header-room-code', room);
-    startPolling(refreshState);
+async function start() {
+  if (window.location.pathname === "/callback") {
+    try {
+      await configureSpotify();
+      await handleSpotifyCallback();
+      room = roomFromUrl();
+    } catch (error) {
+      toast(error.message);
+      room = roomFromUrl();
+    }
   }
+  if (!room) {
+    window.location.replace("/");
+    return;
+  }
+  await refresh();
+  if (!state) return;
+  stopUpdates = createRoomUpdates(room, {
+    controllerMode,
+    onRevision: refresh,
+    onStatus: (status) => {
+      elements.connection.textContent = status === "live" ? "Live" : "Reconnecting";
+    },
+  });
+  timerHandle = window.setInterval(updateTimer, 250);
+  await initializeSpotify();
 }
+
+window.addEventListener("pagehide", () => {
+  stopUpdates?.();
+  if (timerHandle !== null) window.clearInterval(timerHandle);
+});
+void start();
