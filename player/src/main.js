@@ -1,5 +1,5 @@
 /**
- * Hitster Player - Main Application
+ * Noot4Noot Player - Main Application
  *
  * Supports two playback modes:
  * - SDK: Full tracks via Spotify Web Playback SDK (in-browser)
@@ -24,7 +24,7 @@ import {
 } from './ui.js';
 
 // Storage keys
-const DEVICE_KEY = 'hitster_selected_device';
+const DEVICE_KEY = 'noot4noot_selected_device';
 
 // Application state
 let player = null;
@@ -77,7 +77,7 @@ function clearSavedDevice() {
  * Initialize the application
  */
 async function init() {
-  console.log('Hitster Player initializing...');
+  console.log('Noot4Noot Player initializing...');
 
   // Check for OAuth callback
   try {
@@ -126,7 +126,12 @@ function setupLoginHandlers() {
   const loginBtn = document.getElementById('login-btn');
   if (loginBtn) {
     loginBtn.addEventListener('click', async () => {
-      await login();
+      try {
+        await login();
+      } catch (error) {
+        console.error('Login failed:', error);
+        showToast(error.message, 'error', 6000);
+      }
     }, { signal: loginController.signal });
   }
 }
@@ -406,7 +411,7 @@ async function initializeSDKPlayer(token) {
   try {
     await player.initialize({
       token,
-      name: 'Hitster Web Player',
+      name: 'Noot4Noot Web Player',
       volume: 50,
       // M14: getStoredToken() is now async
       getToken: async () => await getStoredToken()
@@ -659,7 +664,7 @@ if (document.readyState === 'loading') {
 
 // M1: Guard debug object to DEV only
 if (import.meta.env.DEV) {
-  window.hitsterDebug = {
+  window.noot4nootDebug = {
     getPlayer: () => player,
     getScanner: () => scanner,
     getSelectedDevice: () => selectedDevice,
@@ -668,4 +673,5 @@ if (import.meta.env.DEV) {
     clearToken,
     login
   };
+  window.hitsterDebug = window.noot4nootDebug;
 }
