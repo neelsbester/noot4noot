@@ -103,5 +103,5 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: digital_game
-          command: deploy --env staging
+          wranglerVersion: "4.112.0"
+          command: deploy --config digital_game/wrangler.jsonc --env staging
