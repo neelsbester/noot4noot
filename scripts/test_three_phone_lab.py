@@ -301,7 +301,7 @@ def authenticate_access(
     page = context.new_page()
     try:
         page.goto(f"{origin}/api/health", wait_until="domcontentloaded")
-        expect(page.locator("body")).to_contain_text('"status":"ok"', timeout=45_000)
+        expect(page.locator("body")).to_contain_text('"ok":true', timeout=45_000)
     finally:
         page.close()
         context.unroute("**/*", add_access_headers)
