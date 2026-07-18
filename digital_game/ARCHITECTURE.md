@@ -118,6 +118,16 @@ buy/replace windows.
   presentation only; clients cannot grant themselves capabilities.
 - User-controlled names are rendered through DOM text APIs, not HTML strings.
 
+## Phone game layout
+
+At phone widths, the timeline is the primary game surface. It renders as a
+full-width vertical sequence of placement gaps and song cards so every choice
+uses the natural page scroll direction and remains easy to tap. Round, team,
+card, token, phase, and current-turn context stay in a compact area above it.
+The host follows the same hierarchy, retaining only playback controls required
+for the current song before the active timeline. Wider host and tablet screens
+may use the horizontal timeline treatment.
+
 ## Three-phone test lab
 
 The owner-only staging/local lab embeds one host and two team pages in a single
@@ -169,5 +179,6 @@ Durable Object namespaces.
   purchase/play/replace, placement, contest/pass, reveal, next round, delegated
   controls, and owner invite creation.
 - A separate Playwright check drives the visible one-window test lab through
-  provisioning, quick start, simulated playback, placement, pass, and reveal.
+  provisioning, quick start, simulated playback, placement, pass, reveal, and
+  hard assertions that all three phone timelines use the vertical layout.
 - Responsive screenshots and hard width assertions cover 390×844 phones.

@@ -67,11 +67,19 @@ def main() -> None:
             host.locator("#game").wait_for(state="visible")
             team_a.locator("#game").wait_for(state="visible")
             team_b.locator("#game").wait_for(state="visible")
-            expect(host.locator("#spotify-connect")).to_have_text("Simulation ready")
+            expect(host.locator("#spotify-connect")).to_be_hidden()
             expect(host.locator("#spotify-device")).to_have_value("test-lab-silent-player")
             expect(host.locator("#spotify-refresh")).to_be_hidden()
             expect(host.locator("#pause-song")).to_be_hidden()
             expect(host.locator("#spotify-fallback")).to_be_hidden()
+            for phone in (host, team_a, team_b):
+                timeline = phone.locator("#timeline")
+                assert timeline.evaluate("(element) => getComputedStyle(element).flexDirection") == "column"
+                card = timeline.locator(".timeline-card").first
+                assert card.evaluate(
+                    "(element) => element.getBoundingClientRect().width "
+                    "/ element.parentElement.getBoundingClientRect().width > 0.95",
+                )
 
             team_a.locator("#host-controls").click()
             team_a.locator("#controller-note").wait_for(state="visible")
@@ -94,6 +102,24 @@ def main() -> None:
             rival = team_b if active is team_a else team_a
             active.locator("#timeline .timeline-gap:not([disabled])").first.click()
             active.locator("#lock-placement").wait_for(state="visible")
+            active_timeline = active.locator("#timeline")
+            action_bar = active.locator(".timeline-panel > .action-row")
+            assert action_bar.evaluate("(element) => getComputedStyle(element).position") == "sticky"
+            assert action_bar.evaluate(
+                "(element) => Boolean(element.compareDocumentPosition("
+                "document.querySelector('#timeline')) & Node.DOCUMENT_POSITION_FOLLOWING)",
+            )
+            active_timeline.evaluate(
+                """(timeline) => {
+                  const cards = [...timeline.children].map((child) => child.cloneNode(true));
+                  for (let copy = 0; copy < 5; copy += 1) {
+                    for (const card of cards) timeline.append(card.cloneNode(true));
+                  }
+                  window.scrollTo(0, timeline.getBoundingClientRect().top + window.scrollY + 300);
+                }""",
+            )
+            assert action_bar.evaluate("(element) => element.getBoundingClientRect().top <= 8")
+            active_timeline.evaluate("() => window.scrollTo(0, 0)")
             active.locator("#lock-placement").click()
             rival.locator("#pass").wait_for(state="visible")
             rival.locator("#pass").click()
@@ -158,6 +184,7 @@ def main() -> None:
     print(
         f"PASS room={room} one_window=host+2_teams isolated_seats=true "
         f"simulation=play+placement+reveal controller=team_to_host_to_team "
+        f"phone_timeline=vertical actions=sticky_on_long_timeline "
         f"restore=frames+shell full_host=opens focus=working screenshot={args.screenshot}"
     )
 

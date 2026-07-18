@@ -38,13 +38,13 @@
     </section>
 
     <section id="game" hidden>
-      <div class="round-strip">
+      <div class="round-strip host-round-strip">
         <div><span>Round</span><strong id="round-number">1</strong></div>
         <div><span>Playing for</span><strong id="active-team">—</strong></div>
         <span id="phase" class="status-pill" aria-live="polite">Turn start</span>
       </div>
       <div class="game-grid">
-        <div>
+        <div class="game-main">
           <article class="panel stage">
             <div id="record" class="record" aria-hidden="true"></div>
             <div>
@@ -55,11 +55,11 @@
               <div id="spotify-box" class="spotify-box">
                 <div class="action-row">
                   <button id="spotify-connect" class="button ghost" type="button">Connect Spotify</button>
-                  <button id="spotify-disconnect" class="button compact" type="button" hidden>Disconnect</button>
                 </div>
                 <div id="spotify-device-row" class="spotify-row" hidden>
                   <select id="spotify-device" aria-label="Spotify playback device"><option value="">Choose playback device</option></select>
                   <button id="spotify-refresh" class="button compact" type="button">Refresh</button>
+                  <button id="spotify-disconnect" class="button compact" type="button" hidden>Disconnect</button>
                 </div>
                 <div class="action-row">
                   <button id="play-song" class="button green" type="button" disabled>Play this song</button>
@@ -73,13 +73,13 @@
 
           <article class="panel timeline-panel">
             <div class="panel-heading"><div><span class="eyebrow">Active timeline</span><h2 id="timeline-team">—</h2></div><span id="timer" class="timer"></span></div>
-            <div id="timeline" class="timeline"></div>
             <p id="round-help" class="message">Waiting for the active team.</p>
             <div class="action-row">
               <button id="force-reveal" class="button" type="button" hidden>Force reveal</button>
               <button id="award-bonus" class="button" type="button" hidden>Award title + artist token</button>
               <button id="next-round" class="button primary" type="button" hidden>Next round</button>
             </div>
+            <div id="timeline" class="timeline"></div>
           </article>
         </div>
 

@@ -286,7 +286,7 @@ async function loadDevices() {
   if (selected) saveSpotifyDevice(selected);
   elements["spotify-device-row"].hidden = false;
   spotifyConnected = true;
-  elements["spotify-connect"].textContent = "Spotify connected";
+  elements["spotify-connect"].hidden = true;
   elements["spotify-disconnect"].hidden = false;
   render();
 }
@@ -303,8 +303,7 @@ async function initializeSpotify() {
       elements["spotify-device"].value = browserDeviceId;
       elements["spotify-device"].disabled = true;
       elements["spotify-device-row"].hidden = false;
-      elements["spotify-connect"].textContent = "Simulation ready";
-      elements["spotify-connect"].disabled = true;
+      elements["spotify-connect"].hidden = true;
       elements["spotify-disconnect"].hidden = true;
       render();
       return;
@@ -369,7 +368,7 @@ elements["spotify-disconnect"].addEventListener("click", () => {
   spotifyConnected = false;
   elements["spotify-device-row"].hidden = true;
   elements["spotify-disconnect"].hidden = true;
-  elements["spotify-connect"].textContent = "Connect Spotify";
+  elements["spotify-connect"].hidden = false;
   render();
 });
 elements["play-song"].addEventListener("click", async () => {

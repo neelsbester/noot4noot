@@ -29,14 +29,16 @@
     </section>
 
     <section id="game" hidden>
-      <div class="round-strip">
+      <div class="round-strip team-round-strip">
         <div><span>Round</span><strong id="round-number">1</strong></div>
         <div><span>Your team</span><strong id="team-name">—</strong></div>
+        <div class="round-stat"><span>Cards</span><output id="card-count">0</output></div>
+        <div class="round-stat"><span>Tokens</span><output id="token-count">0</output></div>
         <span id="phase" class="status-pill" aria-live="polite">Turn start</span>
       </div>
       <div class="game-grid">
-        <div>
-          <article class="panel">
+        <div class="game-main">
+          <article class="panel turn-panel">
             <span id="turn-kicker" class="eyebrow">Waiting</span>
             <h1 id="turn-title" class="page-title" aria-live="polite">Listen closely.</h1>
             <p id="turn-copy" class="muted">The host controls the music.</p>
@@ -48,7 +50,6 @@
 
           <article class="panel timeline-panel">
             <div class="panel-heading"><div><span class="eyebrow">Timeline</span><h2 id="timeline-title">Your cards</h2></div><span id="timer" class="timer"></span></div>
-            <div id="timeline" class="timeline"></div>
             <p id="placement-help" class="message">Your timeline will appear here.</p>
             <div class="action-row">
               <button id="lock-placement" class="button primary" type="button" hidden>Lock placement</button>
@@ -56,16 +57,11 @@
               <button id="pass" class="button" type="button" hidden>No contest</button>
               <button id="lock-challenge" class="button primary" type="button" hidden>Lock contest placement</button>
             </div>
+            <div id="timeline" class="timeline"></div>
           </article>
         </div>
 
         <aside class="side-stack">
-          <article class="panel score-card">
-            <span class="eyebrow">Your score</span>
-            <div class="score-line"><span>Timeline cards</span><output id="card-count">0</output></div>
-            <div class="score-line"><span>Tokens</span><output id="token-count">0</output></div>
-            <p class="muted">Teams may hold at most five tokens.</p>
-          </article>
           <article class="panel">
             <span class="eyebrow">The room</span>
             <div id="game-teams" class="team-list"></div>
