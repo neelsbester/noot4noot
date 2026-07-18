@@ -1,0 +1,32 @@
+[
+  {
+    "id": "bohemian_title",
+    "text": "Bohemian Rhapsody",
+    "expected_candidate_id": "bohemian-rhapsody"
+  },
+  {
+    "id": "queen_artist",
+    "text": "Queen",
+    "expected_candidate_id": "bohemian-rhapsody"
+  },
+  {
+    "id": "billie_both",
+    "text": "Billie Jean by Michael Jackson",
+    "expected_candidate_id": "billie-jean"
+  },
+  {
+    "id": "dancing_title",
+    "text": "Dancing Queen",
+    "expected_candidate_id": "dancing-queen"
+  },
+  {
+    "id": "filler_brightside",
+    "text": "I think it is Mister Brightside",
+    "expected_candidate_id": "mr-brightside"
+  },
+  {
+    "id": "outside_catalogue",
+    "text": "Wonderwall by Oasis",
+    "expected_candidate_id": "none"
+  }
+]
