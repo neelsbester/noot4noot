@@ -1,0 +1,4 @@
+-r requirements.txt
+
+# Browser-level multiplayer smoke test.
+playwright==1.61.0

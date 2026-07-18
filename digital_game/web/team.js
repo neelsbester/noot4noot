@@ -9,17 +9,36 @@ import {
   renderTimeline,
   request,
   roomFromUrl,
+  saveSession,
+  seatFromUrl,
   startPolling,
   teamById,
 } from './shared.js';
 
 const room = roomFromUrl();
+
+function importTeamSession() {
+  const migration = new URLSearchParams(window.location.hash.slice(1)).get('team_session');
+  if (!room || !migration) return;
+  try {
+    const session = JSON.parse(migration);
+    if (session?.token && session?.teamId) {
+      saveSession('team', room, session.token, session.teamId);
+    }
+  } catch {
+    // An invalid migration fragment is ignored and normal session validation handles it.
+  }
+  window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}`);
+}
+
+importTeamSession();
 const session = loadSession('team', room);
 const token = session?.token || '';
 const viewerTeamId = session?.teamId || '';
 const loading = document.querySelector('#team-loading');
 const lobby = document.querySelector('#team-lobby');
 const game = document.querySelector('#team-game');
+const finished = document.querySelector('#team-finished');
 const timeline = document.querySelector('#team-timeline');
 const mainButton = document.querySelector('#team-main-button');
 const noChallengeButton = document.querySelector('#no-challenge-button');
@@ -27,6 +46,9 @@ const mysteryCard = document.querySelector('#team-mystery-card');
 const resultBanner = document.querySelector('#team-result');
 const ghost = document.querySelector('#drag-ghost');
 const toast = createToast(document.querySelector('#toast'));
+const hostModeButton = document.querySelector('#team-host-mode-button');
+const hostAccessDialog = document.querySelector('#host-access-dialog');
+const hostAccessForm = document.querySelector('#host-access-form');
 
 let state = null;
 let lastRevision = -1;
@@ -66,6 +88,8 @@ function renderLobby() {
   loading.hidden = true;
   lobby.hidden = false;
   game.hidden = true;
+  finished.hidden = true;
+  hostModeButton.hidden = false;
   resultBanner.hidden = true;
   setText('#team-name', team?.name || 'YOUR TEAM');
   setText('#team-token-count', team?.tokens ?? 0);
@@ -144,25 +168,28 @@ function renderGame() {
   const challenger = teamById(state, round.challenge_team_id);
   const isActive = team.id === round.active_team_id;
   const isChallenger = team.id === round.challenge_team_id;
-  const [kicker, title, copy] = phasePresentation(round, team, activeTeam, challenger);
+  const [kicker] = phasePresentation(round, team, activeTeam, challenger);
   noChallengeButton.hidden = !state.can.pass_challenge;
 
   loading.hidden = true;
   lobby.hidden = true;
   game.hidden = false;
+  finished.hidden = true;
+  hostModeButton.hidden = false;
   setText('#team-name', team.name);
   setText('#team-token-count', team.tokens);
   setText('#team-status', isActive ? 'Your turn' : `${activeTeam.name}'s turn`);
   setText('#team-stage-kicker', kicker);
-  setText('#team-stage-title', title);
-  setText('#team-stage-copy', copy);
-  setText('#team-round-number', String(round.number).padStart(2, '0'));
-  setText('#team-phase', round.phase.replace('_', ' ').toUpperCase());
 
   const revealed = round.phase === 'revealed';
   mysteryCard.classList.toggle('is-flipped', revealed);
-  mysteryCard.classList.toggle('can-drag', Boolean(state.can.place));
-  mysteryCard.classList.toggle('is-waiting', round.phase === 'challenge' || round.phase === 'reveal_ready');
+  const canDragCard = Boolean(state.can.place || state.can.place_challenge);
+  mysteryCard.setAttribute('aria-disabled', String(!state.can.reveal));
+  mysteryCard.classList.toggle('can-drag', canDragCard);
+  mysteryCard.classList.toggle(
+    'is-waiting',
+    round.phase === 'reveal_ready' || (round.phase === 'challenge' && !state.can.place_challenge),
+  );
   if (revealed) {
     const revealFace = document.querySelector('#team-reveal-face');
     revealFace.className = `mystery-front ${decadeClass(round.song.year)}`;
@@ -211,6 +238,19 @@ function renderGame() {
     reveal: buildRevealTimeline(round),
   });
   bindTimeline(interactiveAction);
+  if (!revealed) {
+    const focusedGap = timeline.querySelector('.timeline-gap.is-challenged')
+      || timeline.querySelector('.timeline-gap.is-selected');
+    window.requestAnimationFrame(() => {
+      const isScrollable = timeline.scrollHeight > timeline.clientHeight + 1;
+      timeline.classList.toggle('is-scrollable', isScrollable);
+      if (focusedGap) {
+        focusedGap.scrollIntoView({ block: 'center', inline: 'nearest' });
+      } else if (isScrollable) {
+        timeline.scrollTop = Math.max(0, (timeline.scrollHeight - timeline.clientHeight) / 2);
+      }
+    });
+  }
   if (revealed) {
     help = round.outcome === 'active_won' || round.outcome === 'challenge_won'
       ? `Correct · gap ${round.correct_placement + 1}`
@@ -248,9 +288,42 @@ function renderGame() {
   renderResult(round, activeTeam, challenger);
 }
 
+function renderFinished() {
+  const team = viewerTeam();
+  const winner = teamById(state, state.room.winner_team_id);
+  const viewerWon = winner?.id === team.id;
+  loading.hidden = true;
+  lobby.hidden = true;
+  game.hidden = true;
+  finished.hidden = false;
+  resultBanner.hidden = true;
+  hostModeButton.hidden = true;
+  setText('#team-name', team.name);
+  setText('#team-token-count', team.tokens);
+  setText('#team-status', 'Game over');
+  setText('#team-finished-kicker', viewerWon ? 'YOU WIN' : 'FINAL SCORE');
+  setText('#team-finished-title', winner ? `${winner.name} wins.` : 'The deck is complete.');
+  setText(
+    '#team-finished-copy',
+    viewerWon
+      ? `Your timeline reached ${winner.card_count} cards.`
+      : winner
+        ? `Your team finished with ${team.card_count} cards.`
+        : 'No team reached the target before the final song.',
+  );
+  const standings = [...state.teams].sort((left, right) => right.card_count - left.card_count || right.tokens - left.tokens);
+  document.querySelector('#team-final-standings').innerHTML = standings.map((standing, index) => `
+    <div class="final-standing ${standing.id === state.room.winner_team_id ? 'is-winner' : ''} ${standing.id === team.id ? 'is-viewer' : ''}">
+      <span>${String(index + 1).padStart(2, '0')}</span>
+      <strong>${escapeHtml(standing.name)}</strong>
+      <small>${standing.card_count} cards</small>
+    </div>`).join('');
+}
+
 function render() {
   if (!state) return;
-  if (state.room.status === 'lobby') renderLobby();
+  if (state.room.status === 'finished') renderFinished();
+  else if (state.room.status === 'lobby') renderLobby();
   else renderGame();
 }
 
@@ -278,7 +351,8 @@ function gapAtPoint(x, y) {
 }
 
 function startDrag(event) {
-  if (!state?.can?.place || (event.pointerType === 'mouse' && event.button !== 0)) return;
+  const canDrag = state?.can?.place || state?.can?.place_challenge;
+  if (!canDrag || (event.pointerType === 'mouse' && event.button !== 0)) return;
   dragging = true;
   pointerId = event.pointerId;
   mysteryCard.setPointerCapture?.(pointerId);
@@ -305,7 +379,10 @@ function endDrag(event) {
   mysteryCard.classList.remove('is-dragging');
   ghost.classList.remove('is-visible');
   timeline.querySelectorAll('.timeline-gap').forEach(gap => gap.classList.remove('is-hovered'));
-  if (target) act('place', { slot: Number(target.dataset.slot) });
+  if (target) {
+    const action = state?.can?.place_challenge ? 'place_challenge' : 'place';
+    act(action, { slot: Number(target.dataset.slot) });
+  }
   event.preventDefault();
 }
 
@@ -313,8 +390,42 @@ mainButton.addEventListener('click', () => {
   if (actionMode) act(actionMode);
 });
 noChallengeButton.addEventListener('click', () => act('pass_challenge'));
+hostModeButton.addEventListener('click', () => {
+  if (!state?.viewer?.cohost_authorized) {
+    document.querySelector('#host-access-error').textContent = '';
+    hostAccessDialog.showModal();
+    document.querySelector('#host-control-code-input').focus();
+    return;
+  }
+  const seat = seatFromUrl();
+  const seatQuery = seat ? `&seat=${encodeURIComponent(seat)}` : '';
+  window.location.assign(`/host?room=${encodeURIComponent(room)}${seatQuery}&mode=team-host`);
+});
+hostAccessForm.addEventListener('submit', async event => {
+  event.preventDefault();
+  const codeInput = document.querySelector('#host-control-code-input');
+  const errorElement = document.querySelector('#host-access-error');
+  errorElement.textContent = '';
+  try {
+    state = await gameAction(room, token, 'authorize_cohost', { control_code: codeInput.value });
+    lastRevision = state.room.revision;
+    hostAccessDialog.close();
+    const seat = seatFromUrl();
+    const seatQuery = seat ? `&seat=${encodeURIComponent(seat)}` : '';
+    window.location.assign(`/host?room=${encodeURIComponent(room)}${seatQuery}&mode=team-host`);
+  } catch (error) {
+    errorElement.textContent = error.message;
+    codeInput.select();
+  }
+});
+hostAccessDialog.querySelector('[data-close-dialog]').addEventListener('click', () => hostAccessDialog.close());
 mysteryCard.addEventListener('click', () => {
   if (state?.can?.reveal) act('reveal');
+});
+mysteryCard.addEventListener('keydown', event => {
+  if (!state?.can?.reveal || !['Enter', ' '].includes(event.key)) return;
+  event.preventDefault();
+  act('reveal');
 });
 mysteryCard.addEventListener('pointerdown', startDrag);
 mysteryCard.addEventListener('pointermove', moveDrag);

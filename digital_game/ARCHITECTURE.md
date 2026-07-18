@@ -15,7 +15,7 @@ digital_game/
     spotify.js               Spotify PKCE, token refresh, Connect API requests
     spotify-browser-player.js Web Playback SDK adapter for audio in the host browser
     test-lab.html / .js      Local host-plus-two-team QA harness with isolated seats
-    game.css                 Shared responsive landscape UI
+    game.css                 Shared mobile-first portrait and responsive tablet/host UI
 tests/
   test_digital_game.py       Rule, visibility, HTTP, challenge, pass, and reveal coverage
 mockups/digital-game/        Earlier interactive design reference
@@ -29,11 +29,7 @@ The server intentionally uses only the Python standard library. The browser impl
 
 State mutations run under a re-entrant lock. Every successful action increments the room `revision`. Host and team pages poll state roughly every 700ms and rerender only when the revision changes.
 
-All state is process-local:
-
-- Restarting the Python server deletes rooms.
-- Restarting a separately launched Cloudflare tunnel is what changes the temporary public hostname.
-- Browser role tokens survive refresh in `localStorage`, but cannot recover a room that no longer exists on the server.
+Every mutation is atomically written to `digital_game/.data/rooms.json` by the CLI server and restored at startup. The path is configurable with `--state-file`; direct `GameService` and `build_server` use remains isolated unless a path is supplied. Browser role tokens survive refresh and remain valid after server recovery. Restarting a separately launched Cloudflare tunnel is what changes the temporary public hostname.
 
 The optional `seat` query parameter namespaces browser session keys. The local test lab uses it to run one host and two independent team identities in same-origin iframes without overwriting each other's tokens.
 
@@ -46,6 +42,7 @@ The optional `seat` query parameter namespaces browser session keys. The local t
 - Ordered team collection.
 - Shuffled deck and used-song set.
 - Active-team index, status, target score, token configuration, and revision.
+- Four-digit host control code, authorized cohost team IDs, and terminal winner/reason.
 - Current round.
 
 ### Team
@@ -74,6 +71,7 @@ lobby
             -> reveal_ready            challenger locks
   -> revealed                          host or active team reveals
   -> placement                         host starts next round
+  -> finished                          target reached or deck exhausted
 ```
 
 Only the active team can place and lock the initial card. A rival can either claim the challenge or pass. Passing is irreversible for that round. A claimed challenge immediately locks out all other rivals.
@@ -103,6 +101,7 @@ The client uses those fields to pulse a correct card in place or animate an inco
 - A successful challenger receives the card; the card is not removed from the active team because it had not yet been awarded.
 - Host token adjustments are limited to `+1` and `-1`, clamped to `0..5`.
 - Buying a random card costs three tokens and inserts a newly drawn song in sorted order.
+- Reaching the target through either a reveal or a random-card purchase records the room winner and gates every subsequent action.
 
 ## API surface
 
@@ -130,10 +129,12 @@ pass_challenge
 place_challenge
 lock_challenge
 close_challenge
+skip_song
 reveal
 next_round
 adjust_tokens
 buy_random_card
+authorize_cohost
 ```
 
 Each handler validates the caller role, round phase, and rule-specific preconditions before mutating state.
@@ -146,7 +147,9 @@ Each handler validates the caller role, round phase, and rule-specific precondit
 - Challenge placement is hidden from non-host, non-challenger clients until answers are locked.
 - Full song metadata is serialized only after reveal.
 
-This is game secrecy, not a hardened anti-cheat boundary. A future internet deployment should add persistent identities, stronger session lifecycle controls, rate limiting, and production headers.
+Team sessions cannot request cohost mode until `authorize_cohost` succeeds with the room's four-digit control code. The original host sees that code; normal team state does not expose it. Authorization is persisted for that team session.
+
+This is game secrecy and a practical trusted-room boundary, not hardened internet identity. A future public deployment should add account identities, stronger session lifecycle controls, rate limiting, code-attempt throttling, and production headers.
 
 ## Spotify path
 
@@ -165,7 +168,7 @@ Recommended first checks in a new session:
 3. Run the focused digital tests.
 4. Start the Python server and Cloudflare tunnel as separate processes when backend reloads are expected.
 5. Register the tunnel's exact `/callback` URI before testing Spotify on iPad.
-6. Use disposable rooms for rule and animation work until persistence is implemented.
+6. Use disposable rooms for rule and animation work, and delete `digital_game/.data/rooms.json` when a clean local slate is required.
 
 For fast UI regression checks, open `/test-lab`, create a three-phone room, and use **Quick start**. The lab is only linked from loopback origins and is development tooling, not a production administration surface.
 

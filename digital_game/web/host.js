@@ -10,6 +10,7 @@ import {
   request,
   roomFromUrl,
   saveSession,
+  seatFromUrl,
   startPolling,
   teamById,
 } from './shared.js';
@@ -20,15 +21,16 @@ import {
   getSpotifyToken,
   handleSpotifyCallback,
   loadSpotifyDevice,
+  pauseSpotifyPlayback,
   playSpotifyTrack,
   saveSpotifyDevice,
-  transferSpotifyPlayback,
 } from './spotify.js';
 import { createBrowserSpotifyPlayer } from './spotify-browser-player.js';
 
 const loading = document.querySelector('#host-loading');
 const lobby = document.querySelector('#host-lobby');
 const game = document.querySelector('#host-game');
+const finished = document.querySelector('#host-finished');
 const toast = createToast(document.querySelector('#toast'));
 
 let room = '';
@@ -39,23 +41,33 @@ let lastRevision = -1;
 let spotifyConnected = false;
 let browserPlayer = null;
 let browserDeviceId = '';
+let playbackCommandInFlight = false;
+
+function isTeamHostMode() {
+  return new URLSearchParams(window.location.search).get('mode') === 'team-host';
+}
+
+function sessionRole() {
+  return isTeamHostMode() ? 'team' : 'host';
+}
 
 function normalizeHostLoopbackOrigin() {
   const currentRoom = roomFromUrl();
   if (window.location.hostname === 'localhost') {
     const port = window.location.port ? `:${window.location.port}` : '';
     const target = new URL(`http://127.0.0.1${port}${window.location.pathname}${window.location.search}`);
-    const session = loadSession('host', currentRoom);
-    if (session?.token) target.hash = `host_session=${encodeURIComponent(JSON.stringify(session))}`;
+    const session = loadSession(sessionRole(), currentRoom);
+    if (session?.token) target.hash = `mode_session=${encodeURIComponent(JSON.stringify(session))}`;
     window.location.replace(target.toString());
     return true;
   }
 
-  const migration = new URLSearchParams(window.location.hash.slice(1)).get('host_session');
-  if (window.location.hostname === '127.0.0.1' && currentRoom && migration) {
+  const fragment = new URLSearchParams(window.location.hash.slice(1));
+  const migration = fragment.get('mode_session') || fragment.get('host_session');
+  if (currentRoom && migration) {
     try {
       const session = JSON.parse(migration);
-      if (session?.token) saveSession('host', currentRoom, session.token, session.teamId || '');
+      if (session?.token) saveSession(sessionRole(), currentRoom, session.token, session.teamId || '');
     } catch {
       // An invalid migration fragment is ignored and normal session validation handles it.
     }
@@ -66,6 +78,13 @@ function normalizeHostLoopbackOrigin() {
 
 const changingOrigin = normalizeHostLoopbackOrigin();
 
+function configureModeUi() {
+  const teamHostMode = isTeamHostMode();
+  document.body.classList.toggle('is-team-host', teamHostMode);
+  document.querySelector('#back-to-team-button').hidden = !teamHostMode;
+  setText('#host-mode-label', teamHostMode ? 'TEAM HOSTING' : 'HOST TABLE');
+}
+
 function setText(selector, value) {
   const element = document.querySelector(selector);
   if (element) element.textContent = value;
@@ -73,11 +92,13 @@ function setText(selector, value) {
 
 async function act(action, payload = {}) {
   try {
-    state = await gameAction(room, token, action, payload);
+    state = await gameAction(room, token, action, payload, { hostMode: isTeamHostMode() });
     lastRevision = state.room.revision;
     render();
+    return true;
   } catch (error) {
     toast(error.message);
+    return false;
   }
 }
 
@@ -85,8 +106,11 @@ function renderLobby() {
   loading.hidden = true;
   lobby.hidden = false;
   game.hidden = true;
+  finished.hidden = true;
   setText('#header-room-code', room);
   setText('#lobby-room-code', room);
+  document.querySelector('#lobby-control-code-card').hidden = !state.room.control_code;
+  setText('#lobby-control-code', state.room.control_code || '');
   setText('#lobby-team-count', `${state.teams.length} / 2 minimum`);
   const joinUrl = `${config?.lan_url || window.location.origin}/?room=${encodeURIComponent(room)}`;
   setText('#join-url', joinUrl);
@@ -106,7 +130,7 @@ function phaseCopy(round, activeTeam, challenger) {
   if (round.phase === 'revealed') {
     if (round.outcome === 'active_won') return [`${activeTeam.name} got it`, 'The card has been added to their timeline.'];
     if (round.outcome === 'challenge_won') return [`${challenger?.name || 'The challenger'} stole it`, 'The challenge was correct and the card changes hands.'];
-    return ['Nobody had it', 'The card returns to the deck.'];
+    return ['Nobody had it', 'The card is out of play.'];
   }
   return ['Round in progress', ''];
 }
@@ -129,12 +153,16 @@ function renderGame() {
   loading.hidden = true;
   lobby.hidden = true;
   game.hidden = false;
+  finished.hidden = true;
   const round = state.round;
   const activeTeam = teamById(state, round.active_team_id);
   const challenger = teamById(state, round.challenge_team_id);
   const [title, copy] = phaseCopy(round, activeTeam, challenger);
 
   setText('#header-room-code', room);
+  const controlCodeCard = document.querySelector('#host-control-code-card');
+  controlCodeCard.hidden = !state.room.control_code;
+  setText('#host-control-code', state.room.control_code || '');
   setText('#host-round-number', String(round.number).padStart(2, '0'));
   setText('#host-active-team', activeTeam?.name || '—');
   setText('#host-phase', round.phase.replace('_', ' ').toUpperCase());
@@ -172,9 +200,11 @@ function renderGame() {
   const closeChallenge = document.querySelector('#close-challenge-button');
   const revealButton = document.querySelector('#host-reveal-button');
   const nextButton = document.querySelector('#next-round-button');
+  const skipButton = document.querySelector('#skip-song-button');
   closeChallenge.hidden = !state.can.close_challenge;
   revealButton.hidden = !state.can.reveal;
   nextButton.hidden = !state.can.next_round;
+  skipButton.hidden = !state.can.skip_song;
 
   let actionCopy = 'Waiting for the active team…';
   if (state.can.close_challenge) actionCopy = 'No rival has challenged yet.';
@@ -198,24 +228,59 @@ function renderGame() {
   fallback.href = spotifyUrl;
   fallback.hidden = !round.song.spotify_url;
   const selectedDevice = document.querySelector('#spotify-device-select').value;
-  document.querySelector('#play-song-button').disabled = !spotifyConnected || !selectedDevice || !round.song.spotify_uri;
+  document.querySelector('#play-song-button').disabled = playbackCommandInFlight || !spotifyConnected || !selectedDevice || !round.song.spotify_uri;
+}
+
+function renderFinished() {
+  loading.hidden = true;
+  lobby.hidden = true;
+  game.hidden = true;
+  finished.hidden = false;
+  setText('#header-room-code', room);
+
+  const winner = teamById(state, state.room.winner_team_id);
+  setText('#host-finished-title', winner ? `${winner.name} wins.` : 'The deck is complete.');
+  setText(
+    '#host-finished-copy',
+    winner
+      ? `${winner.card_count} cards made the winning timeline.`
+      : 'No team reached the target before the final song.',
+  );
+  const standings = [...state.teams].sort((left, right) => right.card_count - left.card_count || right.tokens - left.tokens);
+  document.querySelector('#host-final-standings').innerHTML = standings.map((team, index) => `
+    <div class="final-standing ${team.id === state.room.winner_team_id ? 'is-winner' : ''}">
+      <span>${String(index + 1).padStart(2, '0')}</span>
+      <strong>${escapeHtml(team.name)}</strong>
+      <small>${team.card_count} cards · ${team.tokens} tokens</small>
+    </div>`).join('');
 }
 
 function render() {
   if (!state) return;
-  if (state.room.status === 'lobby') renderLobby();
+  if (state.room.status === 'finished') renderFinished();
+  else if (state.room.status === 'lobby') renderLobby();
   else renderGame();
 }
 
 async function refreshState() {
   try {
-    const fresh = await request(`/api/rooms/${encodeURIComponent(room)}/state`, { token });
+    const fresh = await request(`/api/rooms/${encodeURIComponent(room)}/state`, {
+      token,
+      hostMode: isTeamHostMode(),
+    });
     if (fresh.room.revision !== lastRevision) {
       state = fresh;
       lastRevision = state.room.revision;
       render();
     }
   } catch (error) {
+    if (error.code === 'cohost_authorization_required' && isTeamHostMode()) {
+      toast(error.message);
+      const seat = seatFromUrl();
+      const seatQuery = seat ? `&seat=${encodeURIComponent(seat)}` : '';
+      window.setTimeout(() => window.location.assign(`/team?room=${encodeURIComponent(room)}${seatQuery}`), 900);
+      return;
+    }
     if (error.status === 401 || error.status === 404) {
       toast(error.message);
       window.setTimeout(() => window.location.assign('/'), 1200);
@@ -274,6 +339,14 @@ document.querySelector('#start-game-button').addEventListener('click', () => act
 document.querySelector('#close-challenge-button').addEventListener('click', () => act('close_challenge'));
 document.querySelector('#host-reveal-button').addEventListener('click', () => act('reveal'));
 document.querySelector('#next-round-button').addEventListener('click', () => act('next_round'));
+document.querySelector('#skip-song-button').addEventListener('click', async event => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  const deviceId = document.querySelector('#spotify-device-select').value;
+  if (spotifyConnected && deviceId) await pauseSpotifyPlayback(deviceId).catch(() => {});
+  if (await act('skip_song')) toast('Song skipped · a new mystery card is ready');
+  button.disabled = false;
+});
 
 document.querySelector('#copy-join-url').addEventListener('click', async () => {
   const value = document.querySelector('#join-url').textContent;
@@ -301,23 +374,34 @@ document.querySelector('#spotify-device-select').addEventListener('change', even
   saveSpotifyDevice(event.target.value);
   render();
 });
+document.querySelector('#back-to-team-button').addEventListener('click', () => {
+  const seat = seatFromUrl();
+  const seatQuery = seat ? `&seat=${encodeURIComponent(seat)}` : '';
+  window.location.assign(`/team?room=${encodeURIComponent(room)}${seatQuery}`);
+});
 document.querySelector('#play-song-button').addEventListener('click', async () => {
+  if (playbackCommandInFlight) return;
+  playbackCommandInFlight = true;
+  render();
   try {
     const deviceId = document.querySelector('#spotify-device-select').value;
     if (!deviceId) throw new Error('Choose a Spotify output first');
     if (deviceId === browserDeviceId) await browserPlayer.activate();
-    await transferSpotifyPlayback(deviceId);
     await playSpotifyTrack(state.round.song.spotify_uri, deviceId);
     toast('Mystery song is playing');
   } catch (error) {
     toast(error.message);
+  } finally {
+    playbackCommandInFlight = false;
+    render();
   }
 });
 
 if (!changingOrigin) {
   await initializeSpotify();
   room = room || roomFromUrl();
-  const session = loadSession('host', room);
+  configureModeUi();
+  const session = loadSession(sessionRole(), room);
   if (!room || !session?.token) {
     window.location.replace('/');
   } else {

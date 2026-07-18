@@ -157,6 +157,119 @@ def test_host_can_close_unchallenged_round_and_manage_tokens():
     assert next(team for team in state["teams"] if team["id"] == active_id)["tokens"] == 5
 
 
+def test_host_can_skip_song_without_changing_round_or_active_team():
+    service, host, sessions, state = started_game(seed=4)
+    original_song_id = state["round"]["song"]["id"]
+    active_id = state["round"]["active_team_id"]
+    active = sessions[active_id]
+
+    service.action(host["code"], active["token"], "place", {"slot": 0})
+    skipped = service.action(host["code"], host["token"], "skip_song", {})
+
+    assert skipped["round"]["song"]["id"] != original_song_id
+    assert skipped["round"]["number"] == 1
+    assert skipped["round"]["active_team_id"] == active_id
+    assert skipped["round"]["phase"] == "placement"
+    assert skipped["round"]["placement"] is None
+    assert skipped["can"]["skip_song"] is True
+    assert service.state(host["code"], active["token"])["can"]["skip_song"] is False
+
+
+def test_team_session_can_explicitly_switch_into_cohost_mode():
+    service, host, sessions, state = started_game(seed=4)
+    team = next(iter(sessions.values()))
+    original_song_id = state["round"]["song"]["id"]
+
+    normal_view = service.state(host["code"], team["token"])
+    assert normal_view["viewer"]["role"] == "team"
+    assert normal_view["viewer"]["cohost_authorized"] is False
+    assert normal_view["room"]["control_code"] is None
+    assert normal_view["round"]["song"] == {"id": "mystery"}
+    assert normal_view["can"]["skip_song"] is False
+    with pytest.raises(GameError, match="Only the host"):
+        service.action(host["code"], team["token"], "skip_song", {})
+
+    with pytest.raises(GameError) as unauthorized:
+        service.state(host["code"], team["token"], host_mode=True)
+    assert unauthorized.value.code == "cohost_authorization_required"
+
+    control_code = service.state(host["code"], host["token"])["room"]["control_code"]
+    with pytest.raises(GameError) as wrong_code:
+        service.action(
+            host["code"], team["token"], "authorize_cohost", {"control_code": "0000"}
+        )
+    assert wrong_code.value.code == "invalid_control_code"
+
+    service.action(
+        host["code"], team["token"], "authorize_cohost", {"control_code": control_code}
+    )
+    cohost_view = service.state(host["code"], team["token"], host_mode=True)
+    assert cohost_view["viewer"] == {
+        "role": "cohost",
+        "team_id": team["team_id"],
+        "cohost_authorized": True,
+    }
+    assert cohost_view["round"]["song"]["spotify_uri"].startswith("spotify:track:")
+    assert cohost_view["can"]["skip_song"] is True
+
+    skipped = service.action(
+        host["code"],
+        team["token"],
+        "skip_song",
+        {},
+        host_mode=True,
+    )
+    assert skipped["viewer"]["role"] == "cohost"
+    assert skipped["round"]["song"]["id"] != original_song_id
+
+
+def test_cohost_can_start_a_lobby_without_receiving_the_host_token():
+    service = GameService(sample_songs(), seed=2)
+    host = service.create_room()
+    first = service.join_room(host["code"], "First Team")
+    service.join_room(host["code"], "Second Team")
+    control_code = service.state(host["code"], host["token"])["room"]["control_code"]
+    service.action(
+        host["code"],
+        first["token"],
+        "authorize_cohost",
+        {"control_code": control_code},
+    )
+
+    started = service.action(
+        host["code"],
+        first["token"],
+        "start_game",
+        {},
+        host_mode=True,
+    )
+
+    assert started["room"]["status"] == "playing"
+    assert started["viewer"] == {
+        "role": "cohost",
+        "team_id": first["team_id"],
+        "cohost_authorized": True,
+    }
+    assert first["token"] != host["token"]
+
+
+def test_skipping_a_claimed_challenge_refunds_the_token():
+    service, host, sessions, state = started_game(seed=7)
+    active_id = state["round"]["active_team_id"]
+    challenger_id = next(team_id for team_id in sessions if team_id != active_id)
+    active = sessions[active_id]
+    challenger = sessions[challenger_id]
+
+    service.action(host["code"], active["token"], "place", {"slot": 0})
+    service.action(host["code"], active["token"], "lock_placement", {})
+    challenged = service.action(host["code"], challenger["token"], "claim_challenge", {})
+    assert next(team for team in challenged["teams"] if team["id"] == challenger_id)["tokens"] == 1
+
+    skipped = service.action(host["code"], host["token"], "skip_song", {})
+    assert next(team for team in skipped["teams"] if team["id"] == challenger_id)["tokens"] == 2
+    assert skipped["round"]["challenge_team_id"] is None
+
+
 def test_only_rival_team_can_pass_and_close_challenge_window():
     service, host, sessions, state = started_game(seed=4)
     active_id = state["round"]["active_team_id"]
@@ -210,6 +323,78 @@ def test_three_tokens_buy_a_random_timeline_card():
     team = next(team for team in bought["teams"] if team["id"] == team_id)
     assert team["tokens"] == 0
     assert team["card_count"] == 2
+
+
+def test_reaching_target_finishes_game_and_gates_every_action():
+    service = GameService(sample_songs(), target_cards=2, seed=5)
+    host = service.create_room()
+    teams = [
+        service.join_room(host["code"], "First Team"),
+        service.join_room(host["code"], "Second Team"),
+    ]
+    state = service.action(host["code"], host["token"], "start_game", {})
+    active = next(team for team in teams if team["team_id"] == state["round"]["active_team_id"])
+    slot = correct_slot(service, host["code"])
+
+    service.action(host["code"], active["token"], "place", {"slot": slot})
+    service.action(host["code"], active["token"], "lock_placement", {})
+    service.action(host["code"], host["token"], "close_challenge", {})
+    finished = service.action(host["code"], active["token"], "reveal", {})
+
+    assert finished["room"]["status"] == "finished"
+    assert finished["room"]["winner_team_id"] == active["team_id"]
+    assert finished["room"]["finish_reason"] == "target_reached"
+    assert finished["round"]["phase"] == "revealed"
+    assert finished["can"] == {}
+    with pytest.raises(GameError) as terminal_action:
+        service.action(host["code"], host["token"], "next_round", {})
+    assert terminal_action.value.code == "game_finished"
+
+
+def test_buying_winning_card_finishes_cleanly_during_active_round():
+    service = GameService(sample_songs(), starting_tokens=3, target_cards=2, seed=6)
+    host = service.create_room()
+    first = service.join_room(host["code"], "First Team")
+    service.join_room(host["code"], "Second Team")
+    service.action(host["code"], host["token"], "start_game", {})
+
+    finished = service.action(
+        host["code"],
+        host["token"],
+        "buy_random_card",
+        {"team_id": first["team_id"]},
+    )
+
+    assert finished["room"]["status"] == "finished"
+    assert finished["room"]["winner_team_id"] == first["team_id"]
+    assert finished["can"] == {}
+    team_view = service.state(host["code"], first["token"])
+    assert team_view["room"]["winner_team_id"] == first["team_id"]
+    assert team_view["can"] == {}
+
+
+def test_rooms_and_authorized_cohost_sessions_survive_restart(tmp_path):
+    state_path = tmp_path / "rooms.json"
+    service = GameService(sample_songs(), seed=3, state_path=state_path)
+    host = service.create_room()
+    first = service.join_room(host["code"], "First Team")
+    service.join_room(host["code"], "Second Team")
+    control_code = service.state(host["code"], host["token"])["room"]["control_code"]
+    service.action(
+        host["code"], first["token"], "authorize_cohost", {"control_code": control_code}
+    )
+    started = service.action(host["code"], host["token"], "start_game", {})
+
+    restored = GameService(sample_songs(), seed=99, state_path=state_path)
+    restored_host = restored.state(host["code"], host["token"])
+    restored_team = restored.state(host["code"], first["token"])
+    restored_cohost = restored.state(host["code"], first["token"], host_mode=True)
+
+    assert restored_host["room"]["revision"] == started["room"]["revision"]
+    assert restored_host["round"]["song"]["id"] == started["round"]["song"]["id"]
+    assert restored_team["round"]["song"] == {"id": "mystery"}
+    assert restored_cohost["viewer"]["role"] == "cohost"
+    assert restored_cohost["viewer"]["cohost_authorized"] is True
 
 
 def test_http_server_creates_and_reads_a_room():

@@ -3,19 +3,22 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0c0b09">
+  <meta name="theme-color" content="#f2efe8">
   <title>Noot4Noot — Host</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/game.css">
 </head>
-<body>
+<body class="host-body">
   <main class="host-shell">
     <header class="app-header">
       <a class="brand" href="/"><span class="brand-disc" aria-hidden="true"></span><span>NOOT4NOOT</span></a>
       <div class="header-room">ROOM <strong id="header-room-code">----</strong></div>
-      <div class="live-pill"><i></i><span>HOST TABLE</span></div>
+      <div class="host-header-actions">
+        <button id="back-to-team-button" class="mode-switch-button back-to-team" type="button" hidden><span>←</span> Team view</button>
+        <div class="live-pill"><i></i><span id="host-mode-label">HOST TABLE</span></div>
+      </div>
     </header>
 
     <section id="host-loading" class="full-state"><div class="loading-disc"></div><p>Opening your table…</p></section>
@@ -26,6 +29,7 @@
         <h1 id="lobby-room-code">----</h1>
         <p>Open this address on the phone and iPad:</p>
         <button id="copy-join-url" class="join-url" type="button"><span id="join-url">Loading address…</span><b>COPY</b></button>
+        <div id="lobby-control-code-card" class="control-code-card"><span>HOST CONTROL CODE</span><strong id="lobby-control-code">----</strong><small>Share this only with a team taking over host duties.</small></div>
       </div>
       <div class="lobby-roster">
         <div class="section-heading"><div><span>TEAMS</span><h2>Waiting in the booth</h2></div><strong id="lobby-team-count">0 / 2 minimum</strong></div>
@@ -55,7 +59,10 @@
               <select id="spotify-device-select" aria-label="Spotify playback device"><option value="">Choose device</option></select>
               <button id="spotify-refresh-button" type="button" aria-label="Refresh Spotify devices">↻</button>
             </div>
-            <button id="play-song-button" class="play-song-button" type="button" disabled><span>▶</span> Play mystery song</button>
+            <div class="spotify-playback-actions">
+              <button id="play-song-button" class="play-song-button" type="button" disabled><span class="play-icon" aria-hidden="true"></span> Play song</button>
+              <button id="skip-song-button" class="skip-song-button" type="button" hidden><span>↠</span> Skip song</button>
+            </div>
             <a id="spotify-fallback-link" class="spotify-fallback" href="#" target="_blank" rel="noopener">Open track in Spotify instead</a>
           </div>
         </section>
@@ -75,10 +82,22 @@
 
       <aside class="host-sidebar">
         <div class="section-heading"><div><span>HOST CONTROL</span><h2>Teams & tokens</h2></div></div>
+        <div id="host-control-code-card" class="control-code-card compact"><span>CONTROL CODE</span><strong id="host-control-code">----</strong><small>Required once per team device.</small></div>
         <div class="token-rules"><i></i><p><strong>+1</strong> correct title and artist<br><strong>−1</strong> challenge · <strong>−3</strong> random card</p></div>
         <div id="host-team-list" class="host-team-list"></div>
         <div class="challenge-status"><span>CHALLENGE</span><strong id="challenge-status-copy">Not open yet</strong></div>
       </aside>
+    </section>
+
+    <section id="host-finished" class="game-over-screen" hidden>
+      <div class="game-over-card">
+        <span class="game-over-kicker">FINAL PRESSING</span>
+        <div class="game-over-disc" aria-hidden="true"></div>
+        <h1 id="host-finished-title">We have a winner.</h1>
+        <p id="host-finished-copy">The final timeline is complete.</p>
+        <div id="host-final-standings" class="final-standings"></div>
+        <a class="primary-button game-over-action" href="/">Start a new game <span>→</span></a>
+      </div>
     </section>
   </main>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>

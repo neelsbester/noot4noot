@@ -31,11 +31,12 @@ export function loadSession(role, room, seat = seatFromUrl()) {
   }
 }
 
-export async function request(path, { method = 'GET', token = '', body } = {}) {
+export async function request(path, { method = 'GET', token = '', body, hostMode = false } = {}) {
   const response = await fetch(path, {
     method,
     headers: {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(hostMode ? { 'X-Noot4Noot-Mode': 'host' } : {}),
       ...(body ? { 'Content-Type': 'application/json' } : {}),
     },
     ...(body ? { body: JSON.stringify(body) } : {}),
@@ -50,11 +51,12 @@ export async function request(path, { method = 'GET', token = '', body } = {}) {
   return data;
 }
 
-export function gameAction(room, token, action, payload = {}) {
+export function gameAction(room, token, action, payload = {}, { hostMode = false } = {}) {
   return request(`/api/rooms/${encodeURIComponent(room)}/actions`, {
     method: 'POST',
     token,
     body: { action, ...payload },
+    hostMode,
   });
 }
 
@@ -82,10 +84,10 @@ export function renderTimeline(songs, { placement = null, challengePlacement = n
     const revealTarget = reveal?.correctSlot === slot;
     const wrongAnswer = reveal?.wrongSlots?.includes(slot);
     let gapContent = selected
-      ? '<span class="placed-mini-card"><i></i><b>LOCKED</b></span>'
+      ? '<span class="placed-mini-card"><span class="locked-card-copy"><b>LOCKED IN</b><small>MYSTERY CARD</small></span></span>'
       : challenged
         ? '<span class="challenge-marker">C</span>'
-        : `<span>+</span><small>${challenge ? 'CHALLENGE' : slot === 0 ? 'BEFORE' : slot === songs.length ? 'AFTER' : 'DROP'}</small>`;
+        : `<span class="add-gap-icon" aria-hidden="true"></span><small>${challenge ? 'CHALLENGE' : slot === 0 ? 'BEFORE' : slot === songs.length ? 'AFTER' : 'DROP'}</small>`;
     if (wrongAnswer) gapContent = '<span class="wrong-placement-marker">×</span><small>WRONG SPOT</small>';
     if (revealTarget) {
       const song = reveal.song;

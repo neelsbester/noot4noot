@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0c0b09">
+  <meta name="theme-color" content="#f2efe8">
   <title>Noot4Noot — Team</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/game.css">
 </head>
 <body class="team-body">
@@ -15,7 +15,10 @@
     <header class="team-header">
       <div class="brand"><span class="brand-disc" aria-hidden="true"></span><span>NOOT4NOOT</span></div>
       <div class="team-turn-status"><i></i><strong id="team-name">YOUR TEAM</strong><span id="team-status">Connecting…</span></div>
-      <div class="team-token-pill"><i></i><strong id="team-token-count">0</strong><span>TOKENS</span></div>
+      <div class="team-header-actions">
+        <div class="team-token-pill"><i></i><strong id="team-token-count">0</strong><span>TOKENS</span></div>
+        <button id="team-host-mode-button" class="mode-switch-button" type="button" aria-label="Switch to host controls">Host <span>↗</span></button>
+      </div>
     </header>
 
     <section id="team-loading" class="full-state"><div class="loading-disc"></div><p>Joining the table…</p></section>
@@ -23,17 +26,18 @@
 
     <section id="team-game" class="team-game" hidden>
       <section class="team-stage">
-        <div class="team-stage-copy"><span id="team-stage-kicker">NOW PLAYING</span><h1 id="team-stage-title">Where does it belong?</h1><p id="team-stage-copy">Drag the mystery card into a gap, or tap a gap.</p></div>
-        <div id="team-mystery-card" class="mystery-card draggable" role="button" tabindex="0" aria-label="Mystery song card">
+        <div class="team-stage-copy"><span id="team-stage-kicker">NOW PLAYING</span></div>
+        <div id="team-mystery-card" class="mystery-card draggable" role="button" tabindex="0" aria-disabled="true" aria-label="Mystery song card">
           <div class="mystery-back"><span>NOOT</span><i></i><span>4NOOT</span></div>
           <div id="team-reveal-face" class="mystery-front"><strong>????</strong><span>Mystery track</span><small>Waiting for reveal</small></div>
         </div>
-        <div class="team-round-meta"><span>ROUND</span><strong id="team-round-number">01</strong><i></i><span id="team-phase">PLACEMENT</span></div>
       </section>
 
       <section class="team-board">
         <div class="team-board-heading"><div><span id="timeline-kicker">YOUR TIMELINE</span><h2 id="timeline-owner">—</h2></div><p id="timeline-help">Choose a gap</p></div>
-        <div id="team-timeline" class="timeline team-timeline"></div>
+        <div class="timeline-layout">
+          <div id="team-timeline" class="timeline team-timeline"></div>
+        </div>
       </section>
 
       <footer class="team-actions">
@@ -45,13 +49,34 @@
       </footer>
     </section>
 
-    <div id="team-result" class="result-banner" hidden>
+    <div id="team-result" class="result-banner" role="status" aria-live="assertive" aria-atomic="true" hidden>
       <div id="result-symbol" class="result-symbol">✓</div>
       <div><span id="result-label">PERFECT PLACEMENT</span><strong id="result-song">1985 · TAKE ON ME</strong><small id="result-artist">a-ha</small></div>
       <p id="result-owner">+1<small>CARD</small></p>
     </div>
+    <section id="team-finished" class="game-over-screen team-game-over" hidden>
+      <div class="game-over-card">
+        <span id="team-finished-kicker" class="game-over-kicker">GAME OVER</span>
+        <div class="game-over-disc" aria-hidden="true"></div>
+        <h1 id="team-finished-title">We have a winner.</h1>
+        <p id="team-finished-copy">The final timeline is complete.</p>
+        <div id="team-final-standings" class="final-standings"></div>
+        <a class="primary-button game-over-action" href="/">Leave game <span>→</span></a>
+      </div>
+    </section>
     <div id="drag-ghost" class="drag-ghost" aria-hidden="true"></div>
   </main>
+  <dialog id="host-access-dialog" class="host-access-dialog" aria-labelledby="host-access-title">
+    <form id="host-access-form" method="dialog">
+      <button class="dialog-close" type="button" data-close-dialog aria-label="Close">×</button>
+      <span>SHARED HOSTING</span>
+      <h2 id="host-access-title">Open host controls</h2>
+      <p>Enter the four-digit control code shown on the host screen. This device will be able to reveal, skip, and manage tokens.</p>
+      <label>Control code<input id="host-control-code-input" inputmode="numeric" autocomplete="one-time-code" maxlength="4" pattern="[0-9]{4}" placeholder="0000" required></label>
+      <p id="host-access-error" class="form-error" role="alert"></p>
+      <button class="primary-button" type="submit">Open controls <span>→</span></button>
+    </form>
+  </dialog>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script type="module" src="/team.js"></script>
 </body>

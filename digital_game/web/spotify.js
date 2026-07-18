@@ -5,6 +5,7 @@ const VERIFIER_KEY = 'noot4noot_game_code_verifier';
 const STATE_KEY = 'noot4noot_game_auth_state';
 const ROOM_KEY = 'noot4noot_game_auth_room';
 const SEAT_KEY = 'noot4noot_game_auth_seat';
+const MODE_KEY = 'noot4noot_game_auth_mode';
 const DEVICE_KEY = 'noot4noot_game_spotify_device';
 
 const SCOPES = [
@@ -59,6 +60,7 @@ export async function beginSpotifyLogin(room) {
   sessionStorage.setItem(STATE_KEY, state);
   sessionStorage.setItem(ROOM_KEY, room);
   sessionStorage.setItem(SEAT_KEY, new URLSearchParams(window.location.search).get('seat') || '');
+  sessionStorage.setItem(MODE_KEY, new URLSearchParams(window.location.search).get('mode') || '');
 
   const authUrl = new URL('https://accounts.spotify.com/authorize');
   authUrl.searchParams.set('client_id', clientId);
@@ -84,6 +86,7 @@ export async function handleSpotifyCallback() {
   const verifier = sessionStorage.getItem(VERIFIER_KEY);
   const room = sessionStorage.getItem(ROOM_KEY);
   const seat = sessionStorage.getItem(SEAT_KEY) || '';
+  const mode = sessionStorage.getItem(MODE_KEY) || '';
   if (!state || state !== expectedState || !verifier || !room) {
     throw new Error('Spotify login state expired. Please connect again.');
   }
@@ -109,8 +112,10 @@ export async function handleSpotifyCallback() {
   sessionStorage.removeItem(STATE_KEY);
   sessionStorage.removeItem(ROOM_KEY);
   sessionStorage.removeItem(SEAT_KEY);
+  sessionStorage.removeItem(MODE_KEY);
   const seatQuery = seat ? `&seat=${encodeURIComponent(seat)}` : '';
-  window.history.replaceState({}, document.title, `/host?room=${encodeURIComponent(room)}${seatQuery}`);
+  const modeQuery = mode ? `&mode=${encodeURIComponent(mode)}` : '';
+  window.history.replaceState({}, document.title, `/host?room=${encodeURIComponent(room)}${seatQuery}${modeQuery}`);
   return data.access_token;
 }
 
@@ -158,6 +163,11 @@ async function spotifyRequest(path, options = {}) {
     });
   }
   if (!response.ok) {
+    if (response.status === 429) {
+      const retryAfter = response.headers.get('Retry-After');
+      const suffix = retryAfter ? ` Try again in ${retryAfter} seconds.` : ' Wait briefly before trying again.';
+      throw new Error(`Spotify rate limit reached.${suffix}`);
+    }
     const data = await response.json().catch(() => ({}));
     throw new Error(data?.error?.message || `Spotify error (${response.status})`);
   }
@@ -174,12 +184,9 @@ export async function playSpotifyTrack(uri, deviceId) {
   await spotifyRequest(`/me/player/play${query}`, { method: 'PUT', body: JSON.stringify({ uris: [uri] }) });
 }
 
-export async function transferSpotifyPlayback(deviceId) {
-  if (!deviceId) throw new Error('Choose a Spotify output first');
-  await spotifyRequest('/me/player', {
-    method: 'PUT',
-    body: JSON.stringify({ device_ids: [deviceId], play: false }),
-  });
+export async function pauseSpotifyPlayback(deviceId) {
+  const query = deviceId ? `?device_id=${encodeURIComponent(deviceId)}` : '';
+  await spotifyRequest(`/me/player/pause${query}`, { method: 'PUT' });
 }
 
 export function saveSpotifyDevice(deviceId) {

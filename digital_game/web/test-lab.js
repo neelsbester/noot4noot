@@ -48,7 +48,9 @@ function setFrames(roomCode) {
     config.frame.parentElement.querySelector('.device-empty').hidden = true;
     config.frame.dataset.seatKey = key;
   }
-  openHostLink.href = frameUrl('host', roomCode, seats.host.seat);
+  const hostSession = loadSession('host', roomCode, seats.host.seat);
+  const hostFragment = encodeURIComponent(JSON.stringify({ token: hostSession?.token || '', teamId: '' }));
+  openHostLink.href = `${frameUrl('host', roomCode, seats.host.seat)}#host_session=${hostFragment}`;
   openHostLink.setAttribute('aria-disabled', 'false');
   reloadButton.disabled = false;
 }
@@ -58,6 +60,30 @@ function persistLab(roomCode) {
   const url = new URL(window.location.href);
   url.searchParams.set('room', roomCode);
   window.history.replaceState({}, document.title, url);
+}
+
+function importSharedLabSession() {
+  const encoded = new URLSearchParams(window.location.hash.slice(1)).get('session');
+  if (!encoded) return '';
+  try {
+    const padded = encoded.replaceAll('-', '+').replaceAll('_', '/') + '='.repeat((4 - encoded.length % 4) % 4);
+    const session = JSON.parse(atob(padded));
+    if (!/^[A-Z2-9]{4}$/.test(session.room)) throw new Error('Invalid room code');
+    if (!session.host?.token || !session.teamA?.token || !session.teamB?.token) throw new Error('Missing sessions');
+
+    saveSession('host', session.room, session.host.token, '', seats.host.seat);
+    saveSession('team', session.room, session.teamA.token, session.teamA.teamId, seats.teamA.seat);
+    saveSession('team', session.room, session.teamB.token, session.teamB.teamId, seats.teamB.seat);
+    localStorage.setItem(LAB_KEY, JSON.stringify({ room: session.room }));
+    const cleanUrl = new URL(window.location.href);
+    cleanUrl.hash = '';
+    cleanUrl.searchParams.set('room', session.room);
+    window.history.replaceState({}, document.title, cleanUrl);
+    return session.room;
+  } catch {
+    setStatus('That shared test session is invalid or expired.', true);
+    return '';
+  }
 }
 
 async function createLabGame() {
@@ -157,8 +183,9 @@ document.querySelectorAll('.focus-device').forEach(button => {
 
 window.setInterval(pollState, 900);
 
+const importedRoom = importSharedLabSession();
 const queryRoom = new URLSearchParams(window.location.search).get('room')?.toUpperCase();
 let savedRoom = '';
 try { savedRoom = JSON.parse(localStorage.getItem(LAB_KEY) || '{}').room || ''; } catch { savedRoom = ''; }
-const restored = await restoreLab(queryRoom || savedRoom);
+const restored = await restoreLab(importedRoom || queryRoom || savedRoom);
 if (!restored) setStatus('Create a room to launch three independent phone sessions.');

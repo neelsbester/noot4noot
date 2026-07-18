@@ -40,7 +40,7 @@ export async function createBrowserSpotifyPlayer({ getToken, onError }) {
   player.addListener('authentication_error', report('Reconnect Spotify to enable browser audio.'));
   player.addListener('account_error', report('Spotify Premium is required for browser audio.'));
   player.addListener('playback_error', report('Spotify could not play that track.'));
-  player.addListener('autoplay_failed', () => onError('Tap Play mystery song again to allow audio on this device.'));
+  player.addListener('autoplay_failed', () => onError('Tap Play song again to allow audio on this device.'));
 
   await new Promise((resolve, reject) => {
     const timeout = window.setTimeout(() => reject(new Error('Spotify browser player timed out.')), 15_000);

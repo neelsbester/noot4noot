@@ -27,6 +27,7 @@ DEFAULT_DECK = (
     if (PROJECT_ROOT / "white_people_turnt_shuffled.csv").exists()
     else PROJECT_ROOT / "songs.csv"
 )
+DEFAULT_STATE_PATH = PROJECT_ROOT / "digital_game" / ".data" / "rooms.json"
 
 
 def _load_env_value(name: str) -> str:
@@ -82,7 +83,13 @@ class GameRequestHandler(BaseHTTPRequestHandler):
                 return
             if path.startswith("/api/rooms/") and path.endswith("/state"):
                 code = path.split("/")[3]
-                self._json(self.server.service.state(code, self._token()))
+                self._json(
+                    self.server.service.state(
+                        code,
+                        self._token(),
+                        host_mode=self._host_mode(),
+                    )
+                )
                 return
             self._serve_static(path)
         except GameError as exc:
@@ -109,7 +116,15 @@ class GameRequestHandler(BaseHTTPRequestHandler):
             if path.startswith("/api/rooms/") and path.endswith("/actions"):
                 code = path.split("/")[3]
                 action = str(body.pop("action", ""))
-                self._json(self.server.service.action(code, self._token(), action, body))
+                self._json(
+                    self.server.service.action(
+                        code,
+                        self._token(),
+                        action,
+                        body,
+                        host_mode=self._host_mode(),
+                    )
+                )
                 return
             self._json({"error": "Route not found", "code": "not_found"}, status=404)
         except GameError as exc:
@@ -170,6 +185,9 @@ class GameRequestHandler(BaseHTTPRequestHandler):
             return authorization[7:]
         return ""
 
+    def _host_mode(self) -> bool:
+        return self.headers.get("X-Noot4Noot-Mode", "").strip().lower() == "host"
+
     def _game_error(self, error: GameError) -> None:
         self._json({"error": str(error), "code": error.code}, status=error.status)
 
@@ -195,6 +213,7 @@ def build_server(
     starting_tokens: int = 2,
     target_cards: int = 10,
     seed: int | None = None,
+    state_path: Path | None = None,
 ) -> GameHTTPServer:
     songs = load_song_deck(deck_path)
     service = GameService(
@@ -202,6 +221,7 @@ def build_server(
         starting_tokens=starting_tokens,
         target_cards=target_cards,
         seed=seed,
+        state_path=state_path,
     )
     server = GameHTTPServer((host, port), GameRequestHandler)
     server.service = service
@@ -245,6 +265,12 @@ def main() -> None:
     parser.add_argument("--starting-tokens", type=int, default=2)
     parser.add_argument("--target-cards", type=int, default=10)
     parser.add_argument("--seed", type=int)
+    parser.add_argument(
+        "--state-file",
+        type=Path,
+        default=DEFAULT_STATE_PATH,
+        help="Room recovery file (default: digital_game/.data/rooms.json)",
+    )
     parser.add_argument("--quick-tunnel", action="store_true", help="Create a temporary HTTPS URL for phone/iPad testing")
     parser.add_argument("--public-url", default="", help="Existing public HTTPS URL to show to joining devices")
     args = parser.parse_args()
@@ -256,6 +282,7 @@ def main() -> None:
         starting_tokens=args.starting_tokens,
         target_cards=args.target_cards,
         seed=args.seed,
+        state_path=args.state_file,
     )
     tunnel_process: subprocess.Popen[str] | None = None
     lan_url = args.public_url or f"http://{_local_ip()}:{args.port}"

@@ -23,6 +23,10 @@ function showMode(mode) {
   const joining = mode === 'join';
   joinTab.classList.toggle('is-active', joining);
   hostTab.classList.toggle('is-active', !joining);
+  joinTab.setAttribute('aria-selected', String(joining));
+  hostTab.setAttribute('aria-selected', String(!joining));
+  joinTab.tabIndex = joining ? 0 : -1;
+  hostTab.tabIndex = joining ? -1 : 0;
   joinForm.hidden = !joining;
   hostForm.hidden = joining;
   errorElement.textContent = '';
@@ -30,6 +34,13 @@ function showMode(mode) {
 
 joinTab.addEventListener('click', () => showMode('join'));
 hostTab.addEventListener('click', () => showMode('host'));
+document.querySelector('.entry-tabs').addEventListener('keydown', event => {
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+  const showHost = event.key === 'ArrowRight' || event.key === 'End';
+  showMode(showHost ? 'host' : 'join');
+  (showHost ? hostTab : joinTab).focus();
+  event.preventDefault();
+});
 
 joinForm.addEventListener('submit', async event => {
   event.preventDefault();
