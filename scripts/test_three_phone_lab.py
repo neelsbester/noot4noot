@@ -82,6 +82,8 @@ def main() -> None:
         if access_cookies:
             team_a_context.add_cookies(access_cookies)
             team_b_context.add_cookies(access_cookies)
+        authenticate_access(team_a_context, origin, access_headers)
+        authenticate_access(team_b_context, origin, access_headers)
         host_context.add_init_script("""
           localStorage.setItem('noot4noot_spotify_token', 'test-token');
           localStorage.setItem('noot4noot_spotify_token_expiry', String(Date.now() + 3_600_000));
@@ -295,7 +297,11 @@ def authenticate_access(
         if request_origin != origin:
             route.continue_()
             return
-        route.continue_(headers={**route.request.headers, **access_headers})
+        response = route.fetch(
+            headers={**route.request.headers, **access_headers},
+            max_redirects=0,
+        )
+        route.fulfill(response=response)
 
     context.route("**/*", add_access_headers)
     page = context.new_page()
@@ -304,9 +310,6 @@ def authenticate_access(
         expect(page.locator("body")).to_contain_text('"ok":true', timeout=45_000)
     finally:
         page.close()
-        context.unroute("**/*", add_access_headers)
-
-    assert context.cookies(), "Cloudflare Access authentication did not establish a browser session"
 
 
 def cleanup_test_state(
