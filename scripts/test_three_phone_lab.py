@@ -291,6 +291,20 @@ def authenticate_access(
     if not access_headers:
         return
 
+    if not any(cookie["name"] == "cf_clearance" for cookie in context.cookies()):
+        clearance_page = context.new_page()
+        try:
+            clearance_page.goto(f"{origin}/api/health", wait_until="domcontentloaded")
+            for _ in range(90):
+                if any(cookie["name"] == "cf_clearance" for cookie in context.cookies()):
+                    break
+                current_url = urlparse(clearance_page.url)
+                if f"{current_url.scheme}://{current_url.netloc}" != origin:
+                    break
+                clearance_page.wait_for_timeout(500)
+        finally:
+            clearance_page.close()
+
     def add_access_headers(route: Route) -> None:
         request_url = urlparse(route.request.url)
         request_origin = f"{request_url.scheme}://{request_url.netloc}"
