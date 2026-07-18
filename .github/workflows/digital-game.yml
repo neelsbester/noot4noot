@@ -1,0 +1,107 @@
+name: Digital game
+
+on:
+  pull_request:
+    paths:
+      - "digital_game/**"
+      - "scripts/test_three_phone_lab.py"
+      - "tests/**"
+      - "voice_lab/**"
+      - "requirements-dev.txt"
+      - ".github/workflows/digital-game.yml"
+      - ".github/workflows/digital-game-production.yml"
+  push:
+    branches: [main]
+    paths:
+      - "digital_game/**"
+      - "scripts/test_three_phone_lab.py"
+      - "tests/**"
+      - "voice_lab/**"
+      - "requirements-dev.txt"
+      - ".github/workflows/digital-game.yml"
+      - ".github/workflows/digital-game-production.yml"
+
+concurrency:
+  group: digital-game-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: digital_game
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: digital_game/package-lock.json
+      - run: npm ci
+      - run: npm run check
+      - run: npm run build
+
+  legacy-reference-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - run: python -m pytest tests/ voice_lab/tests -q
+
+  browser-smoke:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: digital_game
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: digital_game/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: npm ci
+      - run: pip install -r ../requirements-dev.txt
+      - run: python -m playwright install --with-deps chromium
+      - name: Start local Worker
+        run: |
+          npm run dev > /tmp/noot4noot-worker.log 2>&1 &
+          echo $! > /tmp/noot4noot-worker.pid
+          for attempt in {1..30}; do
+            curl --fail --silent http://127.0.0.1:5173/api/health && exit 0
+            sleep 1
+          done
+          cat /tmp/noot4noot-worker.log
+          exit 1
+      - run: python ../scripts/test_three_phone_lab.py
+      - if: failure()
+        run: cat /tmp/noot4noot-worker.log
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: three-phone-smoke
+          path: /tmp/noot4noot-three-phone-smoke*.png
+          if-no-files-found: ignore
+
+  deploy-staging:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [verify, legacy-reference-tests, browser-smoke]
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: digital_game
+          command: deploy --env staging

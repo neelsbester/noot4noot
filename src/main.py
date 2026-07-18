@@ -1,6 +1,8 @@
-"""CLI entry point for Hitster Card Generator."""
+"""CLI entry point for the Noot4Noot card toolkit."""
 
 import argparse
+import csv
+import random
 import sys
 from pathlib import Path
 
@@ -24,7 +26,12 @@ def cmd_generate(args):
         
         # Generate PDF
         print(f"Generating cards...")
-        generate_cards_pdf(songs, output_path)
+        generate_cards_pdf(
+            songs,
+            output_path,
+            back_x_offset_mm=args.back_x_offset_mm,
+            back_y_offset_mm=args.back_y_offset_mm,
+        )
         
         print(f"\nSuccess! Cards saved to: {output_path}")
         print("\nPrinting tips:")
@@ -76,10 +83,52 @@ def cmd_import(args):
         sys.exit(1)
 
 
+def cmd_shuffle(args):
+    """Shuffle a song CSV while preserving its header row."""
+    input_path = Path(args.input)
+    output_path = Path(args.output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        if not input_path.exists():
+            raise FileNotFoundError(f"CSV file not found: {input_path}")
+
+        with open(input_path, "r", newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            if reader.fieldnames is None:
+                raise ValueError("CSV file is empty or has no header row")
+            rows = list(reader)
+
+        if not rows:
+            raise ValueError("CSV file contains no songs")
+
+        rng = random.Random(args.seed)
+        rng.shuffle(rows)
+
+        with open(output_path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=reader.fieldnames)
+            writer.writeheader()
+            writer.writerows(rows)
+
+        print(f"Shuffled {len(rows)} songs into: {output_path}")
+        if args.seed is not None:
+            print(f"Seed: {args.seed}")
+
+    except FileNotFoundError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+    except Exception as e:
+        print(f"Unexpected error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
 def main():
     """Main entry point for the CLI."""
     parser = argparse.ArgumentParser(
-        description="Hitster Card Generator - Create QR code cards from Spotify playlists",
+        description="Noot4Noot - create, shuffle, and print QR code cards from Spotify playlists",
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
     
@@ -106,6 +155,24 @@ Example:
         type=str,
         default="output/cards.pdf",
         help="Output path for the generated PDF (default: output/cards.pdf)"
+    )
+    gen_parser.add_argument(
+        "--back-x-offset-mm",
+        type=float,
+        default=0.0,
+        help=(
+            "Horizontal calibration offset applied only to card backs, in mm. "
+            "Positive values move backs right on the PDF."
+        )
+    )
+    gen_parser.add_argument(
+        "--back-y-offset-mm",
+        type=float,
+        default=0.0,
+        help=(
+            "Vertical calibration offset applied only to card backs, in mm. "
+            "Positive values move backs up on the PDF."
+        )
     )
     gen_parser.set_defaults(func=cmd_generate)
     
@@ -150,6 +217,35 @@ or pass them with --client-id and --client-secret.
         )
     )
     import_parser.set_defaults(func=cmd_import)
+
+    # Shuffle command
+    shuffle_parser = subparsers.add_parser(
+        'shuffle',
+        help='Shuffle a song CSV while preserving the header',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Example:
+  python -m src shuffle -i playlist.csv -o playlist_shuffled.csv --seed 42
+        """
+    )
+    shuffle_parser.add_argument(
+        "-i", "--input",
+        type=str,
+        required=True,
+        help="Path to CSV file containing song data"
+    )
+    shuffle_parser.add_argument(
+        "-o", "--output",
+        type=str,
+        required=True,
+        help="Output path for the shuffled CSV"
+    )
+    shuffle_parser.add_argument(
+        "--seed",
+        type=int,
+        help="Optional random seed for reproducible shuffles"
+    )
+    shuffle_parser.set_defaults(func=cmd_shuffle)
     
     # Parse arguments
     args = parser.parse_args()

@@ -5,13 +5,13 @@
  *
  * SETUP:
  * 1. Go to https://developer.spotify.com/dashboard
- * 2. Create a new app (or use your existing Hitster app)
+ * 2. Create a new app
  * 3. Add your redirect URI (e.g., http://127.0.0.1:5173/callback)
- * 4. Copy your Client ID and paste it below OR set VITE_SPOTIFY_CLIENT_ID env var
+ * 4. Set VITE_SPOTIFY_CLIENT_ID in player/.env
  */
 
-// Client ID - env var takes priority, fallback for dev convenience
-const CLIENT_ID = import.meta.env.VITE_SPOTIFY_CLIENT_ID || 'd924c985a04941a1bfc8ffd87fa2e335';
+// Client ID - set VITE_SPOTIFY_CLIENT_ID in player/.env
+const CLIENT_ID = import.meta.env.VITE_SPOTIFY_CLIENT_ID;
 
 // Redirect URI - must match exactly what's in your Spotify Dashboard
 const REDIRECT_URI = window.location.origin + '/callback';
@@ -27,10 +27,10 @@ const SCOPES = [
 ].join(' ');
 
 // Token storage keys
-const TOKEN_KEY = 'hitster_spotify_token';
-const TOKEN_EXPIRY_KEY = 'hitster_spotify_token_expiry';
-const REFRESH_TOKEN_KEY = 'hitster_spotify_refresh_token';
-const CODE_VERIFIER_KEY = 'hitster_code_verifier';
+const TOKEN_KEY = 'noot4noot_spotify_token';
+const TOKEN_EXPIRY_KEY = 'noot4noot_spotify_token_expiry';
+const REFRESH_TOKEN_KEY = 'noot4noot_spotify_refresh_token';
+const CODE_VERIFIER_KEY = 'noot4noot_code_verifier';
 
 /**
  * Generate a random string for PKCE code verifier
@@ -75,6 +75,10 @@ async function generateCodeChallenge(verifier) {
  * Redirect user to Spotify authorization page
  */
 export async function login() {
+  if (!CLIENT_ID) {
+    throw new Error('Missing VITE_SPOTIFY_CLIENT_ID. Add it to player/.env before logging in.');
+  }
+
   if (!window.crypto?.subtle) {
     throw new Error('Secure context required (HTTPS or localhost). Cannot perform authentication over HTTP.');
   }
@@ -112,13 +116,8 @@ export async function handleCallback() {
   const state = urlParams.get('state');
   const error = urlParams.get('error');
 
-  console.debug('handleCallback - code:', code ? 'present' : 'none');
-  console.debug('handleCallback - state from URL:', state);
-  console.debug('handleCallback - error:', error);
-
   // Not a callback
   if (!code && !error) {
-    console.debug('handleCallback - not a callback URL');
     return null;
   }
 
@@ -130,7 +129,6 @@ export async function handleCallback() {
 
   // Validate state parameter (CSRF protection)
   const storedState = sessionStorage.getItem('spotify_auth_state');
-  console.debug('handleCallback - stored state:', storedState);
   if (state !== storedState) {
     console.error('State mismatch - URL state:', state, 'stored state:', storedState);
     return { error: 'state_mismatch' };
@@ -138,7 +136,6 @@ export async function handleCallback() {
 
   // Get stored code verifier
   const codeVerifier = sessionStorage.getItem(CODE_VERIFIER_KEY);
-  console.debug('handleCallback - code verifier:', codeVerifier ? 'present' : 'MISSING');
   if (!codeVerifier) {
     console.error('No code verifier found in sessionStorage');
     return { error: 'no_code_verifier' };

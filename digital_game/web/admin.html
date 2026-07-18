@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#e9e5dc">
+  <title>Noot4Noot — Invites</title>
+  <link rel="stylesheet" href="/game.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="site-header">
+      <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"></span>Noot4Noot</a>
+      <span class="room-badge">Owner console</span>
+      <span class="status-pill">Private</span>
+    </header>
+    <section class="admin-grid">
+      <article class="panel">
+        <span class="eyebrow">New group invite</span>
+        <h1 class="page-title">Invite friends.</h1>
+        <p class="muted">One link can be redeemed by multiple devices in a group. Existing games continue if an invite later expires.</p>
+        <form id="invite-form" class="stack">
+          <label class="field"><span>Label</span><input id="invite-label" required minlength="2" maxlength="80" placeholder="Saturday game night"></label>
+          <label class="field"><span>Available for</span><select id="invite-lifetime"><option value="day">24 hours</option><option value="month">1 month</option><option value="indefinite">Indefinitely</option></select></label>
+          <label class="field"><span>Device redemptions</span><input id="invite-cap" type="number" min="1" max="1000" value="20"></label>
+          <button class="button primary full" type="submit">Generate invite</button>
+        </form>
+        <div id="invite-output" class="stack" hidden>
+          <p class="invite-output"><strong id="invite-url"></strong></p>
+          <button id="copy-invite" class="button green full" type="button">Copy invite link</button>
+          <p class="inline-warning">This is the only time the full invite link is shown.</p>
+        </div>
+      </article>
+      <div class="side-stack">
+        <article class="panel">
+          <div class="panel-heading"><div><span class="eyebrow">Access</span><h2>Invites</h2></div><button id="refresh" class="button compact" type="button">Refresh</button></div>
+          <div id="invites" class="data-list"></div>
+        </article>
+        <article class="panel">
+          <div class="panel-heading"><div><span class="eyebrow">Last 24 hours</span><h2>Rooms</h2></div></div>
+          <div id="rooms" class="data-list"></div>
+        </article>
+      </div>
+    </section>
+  </main>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="/admin.js"></script>
+</body>
+</html>

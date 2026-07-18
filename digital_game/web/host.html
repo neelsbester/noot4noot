@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#e9e5dc">
+  <title>Noot4Noot — Host</title>
+  <link rel="stylesheet" href="/game.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="site-header">
+      <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"></span>Noot4Noot</a>
+      <span class="room-badge">Room <strong id="header-room">----</strong></span>
+      <span id="connection" class="status-pill" role="status" aria-live="polite">Connecting</span>
+    </header>
+
+    <section id="loading" class="loading-state">
+      <div><div class="spinner"></div><p>Opening the host table…</p></div>
+    </section>
+
+    <section id="lobby" class="lobby-grid" hidden>
+      <article class="panel">
+        <span class="eyebrow">Invite your teams</span>
+        <h1 class="page-title">Room is ready.</h1>
+        <div id="room-code" class="room-code">----</div>
+        <p class="muted">Share this code. Everyone must open the same invite link first.</p>
+        <button id="copy-join" class="join-link" type="button"><span id="join-url"></span><strong>Copy address</strong></button>
+      </article>
+      <aside class="panel">
+        <div class="panel-heading"><div><span class="eyebrow">Lobby</span><h2>Teams</h2></div><strong id="team-count">0 / 2</strong></div>
+        <div id="lobby-teams" class="team-list"></div>
+        <div class="stack">
+          <p id="lobby-help" class="message">At least two teams must join and everyone must be ready.</p>
+          <button id="start-game" class="button primary full" type="button" disabled>Start game</button>
+        </div>
+      </aside>
+    </section>
+
+    <section id="game" hidden>
+      <div class="round-strip">
+        <div><span>Round</span><strong id="round-number">1</strong></div>
+        <div><span>Playing for</span><strong id="active-team">—</strong></div>
+        <span id="phase" class="status-pill" aria-live="polite">Turn start</span>
+      </div>
+      <div class="game-grid">
+        <div>
+          <article class="panel stage">
+            <div id="record" class="record" aria-hidden="true"></div>
+            <div>
+              <span id="stage-kicker" class="eyebrow">Mystery song</span>
+              <h1 id="stage-title" class="stage-title" aria-live="polite">Ready when you are.</h1>
+              <p id="stage-copy" class="muted">The host starts every song manually.</p>
+              <div id="song-meta" class="song-meta" hidden><strong id="song-title"></strong><span id="song-artist"></span><span id="song-year"></span></div>
+              <div id="spotify-box" class="spotify-box">
+                <div class="action-row">
+                  <button id="spotify-connect" class="button ghost" type="button">Connect Spotify</button>
+                  <button id="spotify-disconnect" class="button compact" type="button" hidden>Disconnect</button>
+                </div>
+                <div id="spotify-device-row" class="spotify-row" hidden>
+                  <select id="spotify-device" aria-label="Spotify playback device"><option value="">Choose playback device</option></select>
+                  <button id="spotify-refresh" class="button compact" type="button">Refresh</button>
+                </div>
+                <div class="action-row">
+                  <button id="play-song" class="button green" type="button" disabled>Play this song</button>
+                  <button id="pause-song" class="button" type="button" disabled>Pause</button>
+                  <a id="spotify-fallback" class="button compact" href="#" target="_blank" rel="noopener" hidden>Open in Spotify</a>
+                </div>
+              </div>
+              <div id="controller-note" class="controller-note" hidden><strong>Remote host controls.</strong> Spotify stays on the original host device.</div>
+            </div>
+          </article>
+
+          <article class="panel timeline-panel">
+            <div class="panel-heading"><div><span class="eyebrow">Active timeline</span><h2 id="timeline-team">—</h2></div><span id="timer" class="timer"></span></div>
+            <div id="timeline" class="timeline"></div>
+            <p id="round-help" class="message">Waiting for the active team.</p>
+            <div class="action-row">
+              <button id="force-reveal" class="button" type="button" hidden>Force reveal</button>
+              <button id="award-bonus" class="button" type="button" hidden>Award title + artist token</button>
+              <button id="next-round" class="button primary" type="button" hidden>Next round</button>
+            </div>
+          </article>
+        </div>
+
+        <aside class="side-stack">
+          <article class="panel">
+            <div class="panel-heading"><div><span class="eyebrow">Scoreboard</span><h2>Teams</h2></div></div>
+            <div id="game-teams" class="team-list"></div>
+          </article>
+          <article class="panel">
+            <span class="eyebrow">Host controls</span>
+            <p class="muted">Any team device may open these controls. Only this original host can start Spotify playback.</p>
+            <div class="action-row">
+              <button id="back-to-team" class="button full" type="button" hidden>Back to team view</button>
+            </div>
+          </article>
+        </aside>
+      </div>
+    </section>
+
+    <section id="finished" class="panel result-card" hidden>
+      <span class="eyebrow">Final pressing</span>
+      <h1 id="result-title" class="result-title">Game complete.</h1>
+      <p id="result-copy" class="muted"></p>
+      <div id="standings" class="standings"></div>
+      <div class="action-row">
+        <button id="rematch" class="button primary" type="button">Play a rematch</button>
+        <a class="button" href="/">Leave room</a>
+      </div>
+    </section>
+  </main>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="https://sdk.scdn.co/spotify-player.js"></script>
+  <script type="module" src="/host.js"></script>
+</body>
+</html>

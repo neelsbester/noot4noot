@@ -57,11 +57,11 @@ export class SDKPlayer extends PlaybackEngine {
    * @param {Object} options
    * @param {string} options.token - Spotify access token
    * @param {Function} [options.getToken] - Async callback to get a fresh token on expiry
-   * @param {string} [options.name='Hitster Web Player'] - Device name
+   * @param {string} [options.name='Noot4Noot Web Player'] - Device name
    * @param {number} [options.volume=50] - Initial volume (0-100)
    */
   async initialize(options = {}) {
-    const { token, getToken, name = 'Hitster Web Player', volume = 50 } = options;
+    const { token, getToken, name = 'Noot4Noot Web Player', volume = 50 } = options;
 
     if (!token) {
       throw new Error('Access token required for SDK player');

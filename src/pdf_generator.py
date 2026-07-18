@@ -7,7 +7,7 @@ import math
 import random
 
 from reportlab.lib.pagesizes import A4
-from reportlab.lib.units import inch, mm
+from reportlab.lib.units import mm
 from reportlab.lib.colors import black, white, HexColor, Color
 from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
@@ -19,12 +19,16 @@ from .qr_generator import generate_spotify_qr
 
 # ---------------------------------------------------------------------------
 # Card dimensions (square cards)
+#
+# 60mm fits a 3 x 4 grid on A4 while leaving enough edge room for crop marks
+# on home printers and enough tolerance for professional print trimming.
 # ---------------------------------------------------------------------------
-CARD_WIDTH = 2.5 * inch
-CARD_HEIGHT = 2.5 * inch
+CARD_SIZE_MM = 60
+CARD_WIDTH = CARD_SIZE_MM * mm
+CARD_HEIGHT = CARD_SIZE_MM * mm
 
 # Page margins
-MARGIN = 0.5 * inch
+MARGIN = 10 * mm
 
 # ---------------------------------------------------------------------------
 # Typography constants
@@ -263,7 +267,7 @@ def draw_concentric_broken_circles(c: canvas.Canvas, cx: float, cy: float,
     """
     Draw concentric broken/segmented circles in vibrant colors.
 
-    Creates the signature HITSTER card design with three distinct layers.
+    Creates the signature Noot4Noot card design with three distinct layers.
     Uses a local RNG instance seeded per-card so global random state is
     never mutated.
     """
@@ -416,7 +420,9 @@ def draw_song_back(c: canvas.Canvas, x: float, y: float, song: Song, card_num: i
     c.rect(x, y, CARD_WIDTH, CARD_HEIGHT, stroke=1, fill=0)
 
 
-def generate_cards_pdf(songs: List[Song], output_path: Path):
+def generate_cards_pdf(songs: List[Song], output_path: Path,
+                       back_x_offset_mm: float = 0.0,
+                       back_y_offset_mm: float = 0.0):
     """
     Generate a PDF with printable double-sided cards.
 
@@ -426,17 +432,18 @@ def generate_cards_pdf(songs: List[Song], output_path: Path):
     Args:
         songs: List of Song objects to generate cards for
         output_path: Path where the PDF will be saved
+        back_x_offset_mm: Calibration offset applied only to backs; positive moves right
+        back_y_offset_mm: Calibration offset applied only to backs; positive moves up
     """
     page_width, page_height = A4
     cols, rows = calculate_cards_per_page(page_width, page_height)
     cards_per_page = cols * rows
 
     c = canvas.Canvas(str(output_path), pagesize=A4)
+    back_x_offset = back_x_offset_mm * mm
+    back_y_offset = back_y_offset_mm * mm
 
-    total_cards_width = cols * CARD_WIDTH
-    total_cards_height = rows * CARD_HEIGHT
-    start_x = (page_width - total_cards_width) / 2
-    start_y = (page_height - total_cards_height) / 2
+    start_x, start_y = calculate_grid_origin(page_width, page_height, cols, rows)
 
     total_songs = len(songs)
 
@@ -448,8 +455,7 @@ def generate_cards_pdf(songs: List[Song], output_path: Path):
             row = idx // cols
             col = idx % cols
 
-            x = start_x + (col * CARD_WIDTH)
-            y = start_y + ((rows - 1 - row) * CARD_HEIGHT)
+            x, y = front_card_position(start_x, start_y, row, col, rows)
 
             card_num = batch_start + idx + 1
             print(f"  Generating card {card_num}/{total_songs}...")
@@ -466,10 +472,16 @@ def generate_cards_pdf(songs: List[Song], output_path: Path):
             row = idx // cols
             col = idx % cols
 
-            mirrored_col = cols - 1 - col
-
-            x = start_x + (mirrored_col * CARD_WIDTH)
-            y = start_y + ((rows - 1 - row) * CARD_HEIGHT)
+            x, y = back_card_position(
+                start_x,
+                start_y,
+                row,
+                col,
+                rows,
+                cols,
+                x_offset=back_x_offset,
+                y_offset=back_y_offset,
+            )
 
             card_num = batch_start + idx + 1
             theme = get_decade_theme(song.year)
@@ -482,4 +494,39 @@ def generate_cards_pdf(songs: List[Song], output_path: Path):
     c.save()
     print(f"\nGenerated {total_songs} cards in {output_path}")
     print(f"Layout: {cols} columns x {rows} rows = {cards_per_page} cards per page")
+    print(f"Card size: {CARD_SIZE_MM}mm x {CARD_SIZE_MM}mm")
     print(f"Total pages: {((total_songs - 1) // cards_per_page + 1) * 2} (front + back)")
+    if back_x_offset_mm or back_y_offset_mm:
+        print(f"Back-page calibration offset: x={back_x_offset_mm} mm, y={back_y_offset_mm} mm")
+
+
+def calculate_grid_origin(page_width: float, page_height: float, cols: int, rows: int) -> tuple:
+    """Return the centered card-grid origin for a page."""
+    total_cards_width = cols * CARD_WIDTH
+    total_cards_height = rows * CARD_HEIGHT
+    return (
+        (page_width - total_cards_width) / 2,
+        (page_height - total_cards_height) / 2,
+    )
+
+
+def front_card_position(start_x: float, start_y: float, row: int, col: int, rows: int) -> tuple:
+    """Return the front-page card position for a row/column in the print grid."""
+    x = start_x + (col * CARD_WIDTH)
+    y = start_y + ((rows - 1 - row) * CARD_HEIGHT)
+    return x, y
+
+
+def back_card_position(start_x: float, start_y: float, row: int, col: int,
+                       rows: int, cols: int, x_offset: float = 0.0,
+                       y_offset: float = 0.0) -> tuple:
+    """
+    Return the matching back-page card position for short-edge duplex printing.
+
+    Portrait A4 printed duplex with "flip on short edge" keeps the vertical
+    order and mirrors columns horizontally, so each card back lands behind its
+    QR front after the sheet is flipped.
+    """
+    mirrored_col = cols - 1 - col
+    x, y = front_card_position(start_x, start_y, row, mirrored_col, rows)
+    return x + x_offset, y + y_offset

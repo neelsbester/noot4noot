@@ -1,8 +1,11 @@
 {
-  "name": "hitster-player",
+  "name": "noot4noot-player",
   "version": "1.0.0",
-  "description": "QR code scanner and Spotify player for Hitster game",
+  "description": "QR code scanner and Spotify player for Noot4Noot",
   "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -14,7 +17,7 @@
     "jsqr": "^1.4.0"
   },
   "devDependencies": {
-    "vite": "^5.0.0",
-    "vitest": "^4.0.18"
+    "vite": "^6.4.2",
+    "vitest": "^3.2.4"
   }
 }

@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#e9e5dc">
+  <title>Noot4Noot — Team</title>
+  <link rel="stylesheet" href="/game.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="site-header">
+      <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"></span>Noot4Noot</a>
+      <span class="room-badge">Room <strong id="header-room">----</strong></span>
+      <span id="connection" class="status-pill" role="status" aria-live="polite">Connecting</span>
+    </header>
+
+    <section id="loading" class="loading-state"><div><div class="spinner"></div><p>Finding your team…</p></div></section>
+
+    <section id="lobby" class="panel" hidden>
+      <span class="eyebrow">Team lobby</span>
+      <h1 id="lobby-title" class="page-title">You’re in.</h1>
+      <p id="lobby-copy" class="muted">The host will start once every team is ready.</p>
+      <div id="lobby-teams" class="team-list"></div>
+      <div class="action-row">
+        <button id="ready" class="button primary" type="button">I’m ready</button>
+        <a id="lobby-host-controls" class="button" href="#">Open host controls</a>
+      </div>
+    </section>
+
+    <section id="game" hidden>
+      <div class="round-strip">
+        <div><span>Round</span><strong id="round-number">1</strong></div>
+        <div><span>Your team</span><strong id="team-name">—</strong></div>
+        <span id="phase" class="status-pill" aria-live="polite">Turn start</span>
+      </div>
+      <div class="game-grid">
+        <div>
+          <article class="panel">
+            <span id="turn-kicker" class="eyebrow">Waiting</span>
+            <h1 id="turn-title" class="page-title" aria-live="polite">Listen closely.</h1>
+            <p id="turn-copy" class="muted">The host controls the music.</p>
+            <div class="action-row">
+              <button id="buy-card" class="button" type="button" hidden>Buy random card · 3 tokens</button>
+              <button id="replace-song" class="button danger" type="button" hidden>Request another song · 1 token</button>
+            </div>
+          </article>
+
+          <article class="panel timeline-panel">
+            <div class="panel-heading"><div><span class="eyebrow">Timeline</span><h2 id="timeline-title">Your cards</h2></div><span id="timer" class="timer"></span></div>
+            <div id="timeline" class="timeline"></div>
+            <p id="placement-help" class="message">Your timeline will appear here.</p>
+            <div class="action-row">
+              <button id="lock-placement" class="button primary" type="button" hidden>Lock placement</button>
+              <button id="contest" class="button danger" type="button" hidden>Contest · 1 token</button>
+              <button id="pass" class="button" type="button" hidden>No contest</button>
+              <button id="lock-challenge" class="button primary" type="button" hidden>Lock contest placement</button>
+            </div>
+          </article>
+        </div>
+
+        <aside class="side-stack">
+          <article class="panel score-card">
+            <span class="eyebrow">Your score</span>
+            <div class="score-line"><span>Timeline cards</span><output id="card-count">0</output></div>
+            <div class="score-line"><span>Tokens</span><output id="token-count">0</output></div>
+            <p class="muted">Teams may hold at most five tokens.</p>
+          </article>
+          <article class="panel">
+            <span class="eyebrow">The room</span>
+            <div id="game-teams" class="team-list"></div>
+            <a id="host-controls" class="button full" href="#">Open host controls</a>
+          </article>
+        </aside>
+      </div>
+    </section>
+
+    <section id="finished" class="panel result-card" hidden>
+      <span class="eyebrow">Final pressing</span>
+      <h1 id="result-title" class="result-title">Game complete.</h1>
+      <p id="result-copy" class="muted"></p>
+      <div id="standings" class="standings"></div>
+      <a class="button" href="/">Leave room</a>
+    </section>
+  </main>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="/team.js"></script>
+</body>
+</html>

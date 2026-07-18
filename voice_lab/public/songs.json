@@ -1,0 +1,14 @@
+[
+  {"id":"bohemian-rhapsody","title":"Bohemian Rhapsody","artist":"Queen","aliases":["Bohemian Rhapsody by Queen"]},
+  {"id":"billie-jean","title":"Billie Jean","artist":"Michael Jackson","aliases":["Billy Jean"]},
+  {"id":"dancing-queen","title":"Dancing Queen","artist":"ABBA","aliases":["Dancing Queen by Abba"]},
+  {"id":"smells-like-teen-spirit","title":"Smells Like Teen Spirit","artist":"Nirvana","aliases":["Teen Spirit"]},
+  {"id":"blinding-lights","title":"Blinding Lights","artist":"The Weeknd","aliases":["Blinding Lights by Weeknd"]},
+  {"id":"rolling-in-the-deep","title":"Rolling in the Deep","artist":"Adele","aliases":[]},
+  {"id":"take-on-me","title":"Take on Me","artist":"a-ha","aliases":["Take On Me by Aha"]},
+  {"id":"i-wanna-dance-with-somebody","title":"I Wanna Dance with Somebody","artist":"Whitney Houston","aliases":["I Want to Dance with Somebody"]},
+  {"id":"lose-yourself","title":"Lose Yourself","artist":"Eminem","aliases":[]},
+  {"id":"mr-brightside","title":"Mr. Brightside","artist":"The Killers","aliases":["Mister Brightside"]},
+  {"id":"africa","title":"Africa","artist":"Toto","aliases":["Africa by Toto"]},
+  {"id":"levitating","title":"Levitating","artist":"Dua Lipa","aliases":[]}
+]

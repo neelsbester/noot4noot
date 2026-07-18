@@ -2,13 +2,17 @@
 
 import pytest
 from reportlab.lib.pagesizes import A4
-from reportlab.lib.units import inch
+from reportlab.lib.units import mm
 from reportlab.pdfbase.pdfmetrics import stringWidth
 
 from src.pdf_generator import (
     get_decade_theme,
     _truncate_to_width,
     calculate_cards_per_page,
+    calculate_grid_origin,
+    front_card_position,
+    back_card_position,
+    CARD_SIZE_MM,
     CARD_WIDTH,
     CARD_HEIGHT,
     MARGIN,
@@ -81,10 +85,14 @@ class TestTruncateToWidth:
 class TestCalculateCardsPerPage:
     def test_a4_layout(self):
         cols, rows = calculate_cards_per_page(*A4)
-        # A4 is 595 x 842 pt; card is 2.5 in = 180 pt; margin 0.5 in = 36 pt
         # usable_width ≈ 523 → 2 cols; usable_height ≈ 770 → 4 rows
-        assert cols >= 2
-        assert rows >= 4
+        assert cols == 3
+        assert rows == 4
+
+    def test_default_card_size_is_60mm_square(self):
+        assert CARD_SIZE_MM == 60
+        assert CARD_WIDTH == pytest.approx(60 * mm)
+        assert CARD_HEIGHT == pytest.approx(60 * mm)
 
     def test_tiny_page_fits_nothing(self):
         cols, rows = calculate_cards_per_page(100, 100)
@@ -97,3 +105,39 @@ class TestCalculateCardsPerPage:
         cols, rows = calculate_cards_per_page(w, h)
         assert cols == 1
         assert rows == 1
+
+
+class TestDuplexAlignment:
+    def test_back_positions_are_horizontally_mirrored_for_short_edge_duplex(self):
+        cols, rows = calculate_cards_per_page(*A4)
+        start_x, start_y = calculate_grid_origin(A4[0], A4[1], cols, rows)
+
+        for row in range(rows):
+            for col in range(cols):
+                front_x, front_y = front_card_position(start_x, start_y, row, col, rows)
+                back_x, back_y = back_card_position(start_x, start_y, row, col, rows, cols)
+                mirrored_front_x, mirrored_front_y = front_card_position(
+                    start_x, start_y, row, cols - 1 - col, rows
+                )
+
+                assert back_x == mirrored_front_x
+                assert back_y == mirrored_front_y
+                assert front_y == back_y
+
+    def test_grid_is_centered_on_a4_page(self):
+        cols, rows = calculate_cards_per_page(*A4)
+        start_x, start_y = calculate_grid_origin(A4[0], A4[1], cols, rows)
+
+        assert start_x == pytest.approx((A4[0] - cols * CARD_WIDTH) / 2)
+        assert start_y == pytest.approx((A4[1] - rows * CARD_HEIGHT) / 2)
+
+    def test_back_position_accepts_printer_calibration_offsets(self):
+        cols, rows = calculate_cards_per_page(*A4)
+        start_x, start_y = calculate_grid_origin(A4[0], A4[1], cols, rows)
+        base_x, base_y = back_card_position(start_x, start_y, 0, 0, rows, cols)
+        adjusted_x, adjusted_y = back_card_position(
+            start_x, start_y, 0, 0, rows, cols, x_offset=3, y_offset=-5
+        )
+
+        assert adjusted_x == base_x + 3
+        assert adjusted_y == base_y - 5

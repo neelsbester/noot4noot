@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#141411">
+    <title>Noot4Noot Voice Lab</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <div class="grain" aria-hidden="true"></div>
+    <main class="lab-shell">
+      <header class="masthead">
+        <div>
+          <p class="eyebrow">Noot4Noot / experiment 01</p>
+          <h1>Voice answer<br><em>listening booth</em></h1>
+        </div>
+        <div class="connection-badge" id="connectionBadge" data-state="offline">
+          <span class="status-light" aria-hidden="true"></span>
+          <span id="connectionLabel">Offline</span>
+        </div>
+      </header>
+
+      <section class="setup-card" id="setupCard">
+        <div>
+          <p class="panel-number">00 / connection</p>
+          <h2>Open the listening channel</h2>
+          <p id="setupCopy">The API key stays in the local Python server. Your browser receives only the WebRTC session.</p>
+        </div>
+        <button class="connect-button" id="connectButton" type="button">
+          <span>Connect microphone</span>
+          <span aria-hidden="true">↗</span>
+        </button>
+      </section>
+
+      <section class="deck" aria-labelledby="roundHeading">
+        <div class="now-playing">
+          <div class="record-mark" id="recordMark" aria-hidden="true">
+            <span></span><span></span><span></span>
+          </div>
+          <div class="track-copy">
+            <p class="panel-number" id="roundHeading">01 / simulated answer</p>
+            <p class="track-kicker">The answer on this card is</p>
+            <h2 id="targetTitle">Loading catalogue…</h2>
+            <p class="artist" id="targetArtist">—</p>
+          </div>
+          <div class="round-index" id="roundIndex">01</div>
+        </div>
+
+        <div class="transport">
+          <span id="playState">SIMULATION PLAYING</span>
+          <div class="transport-line"><span id="transportProgress"></span></div>
+          <span id="elapsedTime">0:00</span>
+        </div>
+
+        <div class="answer-zone">
+          <div class="button-orbit" id="buttonOrbit">
+            <button class="answer-button" id="answerButton" type="button" disabled aria-describedby="answerHelp">
+              <span class="answer-idle">Hold to<br><strong>answer</strong></span>
+              <span class="answer-live">Listening<br><strong>speak now</strong></span>
+            </button>
+          </div>
+          <p id="answerHelp">Press and hold. The simulated music stops immediately. Release when you finish speaking.</p>
+          <div class="meter" id="meter" aria-hidden="true">
+            <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+          </div>
+        </div>
+
+        <section class="result-card" id="resultCard" data-verdict="waiting" aria-live="polite">
+          <div class="result-stamp" id="resultStamp">WAITING</div>
+          <div class="result-main">
+            <p class="panel-number">02 / model return</p>
+            <h3 id="resultHeadline">Your answer will land here.</h3>
+            <p id="heardText">Connect, then hold the answer button and speak.</p>
+          </div>
+          <dl class="result-data">
+            <div><dt>Matched</dt><dd id="matchedSong">—</dd></div>
+            <div><dt>Confidence</dt><dd id="confidenceValue">—</dd></div>
+            <div><dt>Round trip</dt><dd id="latencyValue">—</dd></div>
+          </dl>
+        </section>
+
+        <div class="lab-controls">
+          <button type="button" id="retryButton">↺ Replay round</button>
+          <button type="button" id="nextButton">Next random song →</button>
+        </div>
+      </section>
+
+      <aside class="test-strip">
+        <div>
+          <p class="panel-number">Test cue</p>
+          <p>For a deliberately wrong answer, try saying <strong id="wrongAnswerCue">another song</strong>.</p>
+        </div>
+        <label class="audio-toggle">
+          <input type="checkbox" id="audioBedToggle">
+          <span aria-hidden="true"></span>
+          Play a quiet synthetic music bed
+        </label>
+      </aside>
+
+      <details class="debug-panel">
+        <summary>Raw Realtime events <span>developer view</span></summary>
+        <pre id="eventLog">No events yet.</pre>
+      </details>
+    </main>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

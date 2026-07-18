@@ -1,2 +1,1 @@
-# Hitster Card Generator
-
+# Noot4Noot card generator

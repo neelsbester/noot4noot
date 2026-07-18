@@ -94,9 +94,9 @@ describe('getStoredToken', () => {
   });
 
   it('returns the token when stored and not expired', async () => {
-    storage['hitster_spotify_token'] = 'test-token-abc';
+    storage['noot4noot_spotify_token'] = 'test-token-abc';
     // Expiry far in the future
-    storage['hitster_spotify_token_expiry'] = String(Date.now() + 3_600_000);
+    storage['noot4noot_spotify_token_expiry'] = String(Date.now() + 3_600_000);
     const token = await getStoredToken();
     expect(token).toBe('test-token-abc');
   });
@@ -109,15 +109,15 @@ describe('clearToken', () => {
   });
 
   it('removes all token-related keys from localStorage', () => {
-    storage['hitster_spotify_token'] = 'tok';
-    storage['hitster_spotify_token_expiry'] = '123';
-    storage['hitster_spotify_refresh_token'] = 'ref';
+    storage['noot4noot_spotify_token'] = 'tok';
+    storage['noot4noot_spotify_token_expiry'] = '123';
+    storage['noot4noot_spotify_refresh_token'] = 'ref';
 
     clearToken();
 
-    expect(localStorageMock.removeItem).toHaveBeenCalledWith('hitster_spotify_token');
-    expect(localStorageMock.removeItem).toHaveBeenCalledWith('hitster_spotify_token_expiry');
-    expect(localStorageMock.removeItem).toHaveBeenCalledWith('hitster_spotify_refresh_token');
+    expect(localStorageMock.removeItem).toHaveBeenCalledWith('noot4noot_spotify_token');
+    expect(localStorageMock.removeItem).toHaveBeenCalledWith('noot4noot_spotify_token_expiry');
+    expect(localStorageMock.removeItem).toHaveBeenCalledWith('noot4noot_spotify_refresh_token');
   });
 });
 

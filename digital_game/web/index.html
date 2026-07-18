@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#e9e5dc">
+  <meta name="referrer" content="no-referrer">
+  <title>Noot4Noot — Music in order</title>
+  <link rel="stylesheet" href="/game.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="Noot4Noot home"><span class="brand-mark" aria-hidden="true"></span>Noot4Noot</a>
+      <span class="room-badge">Millennial Anthems</span>
+      <span id="access-mark" class="status-pill">Private game</span>
+    </header>
+
+    <div class="hero">
+      <section class="paper hero-copy">
+        <span class="eyebrow">A music timeline game</span>
+        <h1>Listen. Place. Settle it.</h1>
+        <p>One host plays the songs. Every team builds a timeline. Put the mystery track in the right year—or contest someone who gets it wrong.</p>
+      </section>
+
+      <section class="panel gate-card">
+        <div id="invite-loading" class="loading-state">
+          <div><div class="spinner"></div><h2>Checking your invite</h2><p>Just a moment.</p></div>
+        </div>
+
+        <div id="invite-required" hidden>
+          <span class="eyebrow">Invite required</span>
+          <h2>This table is private.</h2>
+          <p class="gate-copy">Open the group invite link you were sent, then come back here to create or join games.</p>
+        </div>
+
+        <div id="game-entry" hidden>
+          <div class="tabs" role="tablist" aria-label="Create or join">
+            <button class="tab is-active" type="button" role="tab" id="join-tab" aria-controls="join-panel" aria-selected="true">Join a game</button>
+            <button class="tab" type="button" role="tab" id="create-tab" aria-controls="create-panel" aria-selected="false">Create a game</button>
+          </div>
+
+          <form id="join-panel" class="stack" aria-labelledby="join-tab">
+            <div>
+              <span class="eyebrow">Join your group</span>
+              <h2>Take your seat.</h2>
+              <p class="gate-copy">Enter the host’s room code and choose one team name for this device.</p>
+            </div>
+            <label class="field field-code"><span>Room code</span><input id="room-code" name="room" maxlength="4" autocomplete="off" autocapitalize="characters" required placeholder="ABCD"></label>
+            <label class="field"><span>Team name</span><input id="team-name" name="team" minlength="2" maxlength="28" autocomplete="nickname" required placeholder="The Needle Drops"></label>
+            <button class="button primary full" type="submit">Join room</button>
+          </form>
+
+          <form id="create-panel" class="stack" aria-labelledby="create-tab" hidden>
+            <div>
+              <span class="eyebrow">Host a table</span>
+              <h2>Set up the game.</h2>
+              <p class="gate-copy">Choose the rules before your friends join.</p>
+            </div>
+            <label class="field"><span>Deck</span><select id="deck-select" name="deck"></select></label>
+            <div class="form-grid">
+              <label class="field"><span>Cards to win</span><input id="target-cards" type="number" min="2" max="20" value="10"></label>
+              <label class="field"><span>Starting tokens</span><input id="starting-tokens" type="number" min="0" max="5" value="2"></label>
+            </div>
+            <label class="field"><span>Contest timer</span><select id="challenge-timer"><option value="0">Off · host decides</option><option value="30">30 seconds</option><option value="45">45 seconds</option><option value="60">60 seconds</option></select></label>
+            <label class="check-row"><input id="title-bonus" type="checkbox" checked><span><strong>Title + artist bonus</strong><br><span class="muted">Host may award one token each round.</span></span></label>
+            <button class="button green full" type="submit">Create room</button>
+          </form>
+        </div>
+      </section>
+    </div>
+  </main>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="/landing.js"></script>
+</body>
+</html>
