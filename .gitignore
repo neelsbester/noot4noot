@@ -32,6 +32,7 @@ Thumbs.db
 
 # Generated PDFs (keep output folder via .gitkeep)
 output/*.pdf
+output/*_report.txt
 
 # Environment variables
 .env
@@ -60,3 +61,9 @@ node_modules/
 player/dist/
 player/.vite/
 *.log
+voice_lab/benchmark_artifacts/
+digital_game/.data/
+
+# Local agent/tool configuration
+.bridgespace/
+.claude/
