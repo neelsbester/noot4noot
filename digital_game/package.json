@@ -24,5 +24,8 @@
     "typescript-eslint": "latest",
     "vitest": "latest",
     "wrangler": "latest"
+  },
+  "dependencies": {
+    "jose": "^6.2.3"
   }
 }

@@ -229,6 +229,31 @@ describe("placement, contest, and reveal", () => {
     expect(state.currentRound?.phase).toBe("revealed");
   });
 
+  it("refunds and clears a contest position that was selected but never locked", () => {
+    const state = lobby();
+    readyAndStart(state);
+    startPlacement(state);
+    lockActivePlacement(state);
+    const active = state.currentRound?.activeTeamId;
+    const rival = state.teams.find((team) => team.id !== active);
+    if (!rival) throw new Error("missing rival");
+    const before = rival.tokens;
+    applyGameAction(state, { type: "contest", teamId: rival.id }, songs, actor({ role: "team", teamId: rival.id }));
+    const activeSlot = state.currentRound?.placement ?? 0;
+    const rivalSlot = activeSlot === 0 ? 1 : 0;
+    applyGameAction(
+      state,
+      { type: "place_challenge", teamId: rival.id, slot: rivalSlot },
+      songs,
+      actor({ role: "team", teamId: rival.id }),
+    );
+    applyGameAction(state, { type: "force_reveal" }, songs, actor({ role: "host" }));
+    expect(rival.tokens).toBe(before);
+    expect(state.currentRound?.challengeTeamId).toBeNull();
+    expect(state.currentRound?.challengePlacement).toBeNull();
+    expect(state.currentRound?.outcome).not.toBe("challenge_won");
+  });
+
   it("uses the timer deadline and does not treat reads as activity", () => {
     const state = lobby({ challengeTimerSeconds: 30 });
     readyAndStart(state);

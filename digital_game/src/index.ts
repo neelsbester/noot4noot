@@ -1,19 +1,10 @@
-import { DurableObject } from "cloudflare:workers";
+import { handleRequest } from "./router";
 
-export class DirectoryDurableObject extends DurableObject<CloudflareEnv> {
-  ping(): string {
-    return "directory-ready";
-  }
-}
-
-export class RoomDurableObject extends DurableObject<CloudflareEnv> {
-  ping(): string {
-    return "room-ready";
-  }
-}
+export { DirectoryDurableObject } from "./durable/directory";
+export { RoomDurableObject } from "./durable/room";
 
 export default {
-  fetch(): Response {
-    return Response.json({ error: "Not implemented", code: "not_implemented" }, { status: 501 });
+  async fetch(request: Request, env: CloudflareEnv, ctx: ExecutionContext): Promise<Response> {
+    return handleRequest(request, env, ctx);
   },
 } satisfies ExportedHandler<CloudflareEnv>;

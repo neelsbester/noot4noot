@@ -37,6 +37,8 @@
     }
   },
   "vars": {
+    "ACCESS_AUD": "",
+    "ACCESS_TEAM_DOMAIN": "",
     "ADMIN_EMAIL": "neelsbester1993@gmail.com",
     "ENVIRONMENT": "development",
     "SPOTIFY_CLIENT_ID": ""
@@ -56,6 +58,8 @@
         ]
       },
       "vars": {
+        "ACCESS_AUD": "",
+        "ACCESS_TEAM_DOMAIN": "",
         "ADMIN_EMAIL": "neelsbester1993@gmail.com",
         "ENVIRONMENT": "local",
         "SPOTIFY_CLIENT_ID": ""
@@ -76,6 +80,8 @@
         }
       ],
       "vars": {
+        "ACCESS_AUD": "",
+        "ACCESS_TEAM_DOMAIN": "",
         "ADMIN_EMAIL": "neelsbester1993@gmail.com",
         "ENVIRONMENT": "staging",
         "SPOTIFY_CLIENT_ID": "d924c985a04941a1bfc8ffd87fa2e335"
@@ -96,6 +102,8 @@
         }
       ],
       "vars": {
+        "ACCESS_AUD": "",
+        "ACCESS_TEAM_DOMAIN": "",
         "ADMIN_EMAIL": "neelsbester1993@gmail.com",
         "ENVIRONMENT": "production",
         "SPOTIFY_CLIENT_ID": "d924c985a04941a1bfc8ffd87fa2e335"

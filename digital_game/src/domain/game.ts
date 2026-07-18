@@ -350,10 +350,11 @@ function resolveTimer(state: GameState, songs: ReadonlyMap<string, Song>, contex
 }
 
 function cancelIncompleteChallenge(state: GameState, round: GameRound): void {
-  if (round.challengeTeamId !== null && round.challengePlacement === null) {
+  if (round.challengeTeamId !== null) {
     const challenger = findTeam(state, round.challengeTeamId);
     challenger.tokens = Math.min(MAX_TOKENS, challenger.tokens + 1);
     round.challengeTeamId = null;
+    round.challengePlacement = null;
   }
 }
 
