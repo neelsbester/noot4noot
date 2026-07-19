@@ -154,7 +154,6 @@ function renderGame() {
   elements.contest.hidden = !state.can.contest;
   elements.pass.hidden = !state.can.passChallenge;
   elements["lock-challenge"].hidden = !state.can.lockChallenge;
-  elements["game-teams"].replaceChildren(...state.teams.map(teamRow));
   updateTimer();
 }
 

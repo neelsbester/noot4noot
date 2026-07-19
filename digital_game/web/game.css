@@ -553,7 +553,21 @@ a {
 }
 
 .team-round-strip {
-  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto auto;
+}
+
+.host-round-strip {
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+}
+
+.team-game-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.top-role-button {
+  width: 60px;
+  min-height: 40px;
+  padding-inline: 13px;
 }
 
 .round-strip span {
@@ -987,7 +1001,11 @@ a {
   }
 
   .team-round-strip {
-    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+  }
+
+  .host-round-strip {
+    grid-template-columns: auto minmax(0, 1fr) auto;
   }
 
   .round-strip .status-pill {
@@ -1012,6 +1030,12 @@ a {
 
   .round-strip output {
     font-size: 1rem;
+  }
+
+  .top-role-button {
+    min-height: 36px;
+    padding: 6px 10px;
+    font-size: 0.72rem;
   }
 
   .game-grid {

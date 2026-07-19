@@ -34,9 +34,10 @@
         <div><span>Your team</span><strong id="team-name">—</strong></div>
         <div class="round-stat"><span>Cards</span><output id="card-count">0</output></div>
         <div class="round-stat"><span>Tokens</span><output id="token-count">0</output></div>
+        <a id="host-controls" class="button compact top-role-button" href="#">Host</a>
         <span id="phase" class="status-pill" aria-live="polite">Turn start</span>
       </div>
-      <div class="game-grid">
+      <div class="game-grid team-game-grid">
         <div class="game-main">
           <article class="panel turn-panel">
             <span id="turn-kicker" class="eyebrow">Waiting</span>
@@ -60,14 +61,6 @@
             <div id="timeline" class="timeline"></div>
           </article>
         </div>
-
-        <aside class="side-stack">
-          <article class="panel">
-            <span class="eyebrow">The room</span>
-            <div id="game-teams" class="team-list"></div>
-            <a id="host-controls" class="button full" href="#">Open host controls</a>
-          </article>
-        </aside>
       </div>
     </section>
 

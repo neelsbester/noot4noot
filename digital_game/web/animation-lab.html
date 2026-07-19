@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#e9e5dc">
+  <title>Noot4Noot — Motion studies</title>
+  <link rel="stylesheet" href="/animation-lab.css">
+</head>
+<body>
+  <main class="lab-shell">
+    <header class="lab-header">
+      <div>
+        <span class="eyebrow">Noot4Noot motion studies</span>
+        <h1>Movement with a little pulse.</h1>
+        <p>Three restrained directions for each high-value game moment. Every study uses the real phone palette and proportions.</p>
+      </div>
+      <div class="lab-controls">
+        <button id="play-all" class="button primary" type="button">Replay all</button>
+        <label class="motion-toggle"><input id="reduce-motion" type="checkbox"> Reduce motion</label>
+      </div>
+    </header>
+
+    <nav class="section-nav" aria-label="Motion study sections">
+      <a href="#placement">Placement</a>
+      <a href="#locking">Locking</a>
+      <a href="#reveal">Reveal</a>
+      <a href="#earned-card">Card earned</a>
+      <a href="#turn-change">Turn change</a>
+      <a href="#tokens">Tokens</a>
+    </nav>
+
+    <section id="placement" class="study-section">
+      <div class="section-heading">
+        <div><span class="section-number">01</span><h2>Choosing a timeline position</h2></div>
+        <p>Make a tap feel deliberate before the team commits.</p>
+      </div>
+      <div class="variant-grid">
+        <article class="variant recommended" data-demo="placement-magnet">
+          <header><div><span class="variant-name">A · Quiet magnet</span><strong>Recommended</strong></div><button class="replay" type="button">Replay</button></header>
+          <div class="demo-stage placement-stage">
+            <div class="mini-card"><b>1997</b><span>Barbie Girl</span><small>Aqua</small></div>
+            <div class="placement-gap"><span class="mystery-dot"></span><b>Place here</b></div>
+            <div class="mini-card"><b>2009</b><span>I Gotta Feeling</span><small>Black Eyed Peas</small></div>
+          </div>
+          <p>The gap opens, receives a soft pulse, and attracts the mystery marker.</p>
+        </article>
+
+        <article class="variant" data-demo="placement-shift">
+          <header><div><span class="variant-name">B · Neighbour shift</span></div><button class="replay" type="button">Replay</button></header>
+          <div class="demo-stage placement-stage shift-stage">
+            <div class="mini-card"><b>1984</b><span>Material Girl</span><small>Madonna</small></div>
+            <div class="placement-gap"><b>Place here</b></div>
+            <div class="mini-card"><b>1997</b><span>MMMBop</span><small>Hanson</small></div>
+          </div>
+          <p>The surrounding cards make room, clarifying exactly where the song will land.</p>
+        </article>
+
+        <article class="variant" data-demo="placement-focus">
+          <header><div><span class="variant-name">C · Focus rail</span></div><button class="replay" type="button">Replay</button></header>
+          <div class="demo-stage placement-stage focus-stage">
+            <div class="placement-gap compact-gap"><b>Before</b></div>
+            <div class="mini-card"><b>2006</b><span>Maneater</span><small>Nelly Furtado</small></div>
+            <div class="placement-gap selected-gap"><b>Place here</b></div>
+            <div class="mini-card"><b>2019</b><span>Adore You</span><small>Harry Styles</small></div>
+          </div>
+          <p>Other choices quieten while a slim highlight travels into the selected gap.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="locking" class="study-section">
+      <div class="section-heading">
+        <div><span class="section-number">02</span><h2>Locking a placement</h2></div>
+        <p>Confirmation should feel firm without becoming a celebration.</p>
+      </div>
+      <div class="variant-grid">
+        <article class="variant recommended" data-demo="lock-settle">
+          <header><div><span class="variant-name">A · Settle and check</span><strong>Recommended</strong></div><button class="replay" type="button">Replay</button></header>
+          <div class="demo-stage lock-stage">
+            <div class="selected-slot"><span class="mystery-dot"></span><b>Your placement</b><i>✓</i></div>
+            <button class="mock-action" type="button">Lock placement</button>
+          </div>
+          <p>The selection settles into place and a small check confirms the server action.</p>
+        </article>
+
+        <article class="variant" data-demo="lock-trace">
+          <header><div><span class="variant-name">B · Outline trace</span></div><button class="replay" type="button">Replay</button></header>
+          <div class="demo-stage lock-stage">
+            <div class="selected-slot trace-slot"><span class="mystery-dot"></span><b>Your placement</b></div>
+            <button class="mock-action" type="button">Lock placement</button>
+          </div>
+          <p>A single line traces the chosen slot, then resolves into the locked colour.</p>
+        </article>
+
+        <article class="variant" data-demo="lock-sweep">
+          <header><div><span class="variant-name">C · Button sweep</span></div><button class="replay" type="button">Replay</button></header>
+          <div class="demo-stage lock-stage">
+            <div class="selected-slot"><span class="mystery-dot"></span><b>Your placement</b></div>
+            <button class="mock-action sweep-action" type="button"><span>Lock placement</span><i>Locked ✓</i></button>
+          </div>
+          <p>The button itself carries the progress and confirmation, leaving the timeline still.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="reveal" class="study-section">
+      <div class="section-heading">
+        <div><span class="section-number">03</span><h2>Revealing the result</h2></div>
+        <p>The biggest dramatic beat—clear first, delightful second.</p>
+      </div>
+      <div class="variant-grid">
+        <article class="variant recommended" data-demo="reveal-wash">
+          <header><div><span class="variant-name">A · Verdict wash</span><strong>Recommended</strong></div><button class="replay" type="button">Replay</button></header>
+          <div class="demo-stage reveal-stage">
+            <div class="verdict wrong">Wrong position</div>
+            <div class="reveal-card"><b>1997</b><span>Barbie Girl</span><small>Aqua</small></div>
+            <div class="verdict correct">Correct position</div>
+          </div>
+          <p>A muted red response lands first, then the correct slot receives a calm green wash.</p>
+        </article>
+
+        <article class="variant" data-demo="reveal-flip">
+          <header><div><span class="variant-name">B · Year flip</span></div><button class="replay" type="button">Replay</button></header>
+          <div class="demo-stage reveal-stage flip-stage">
+            <div class="flip-card">
+              <div class="flip-inner">
+                <div class="flip-face flip-front"><span class="record-icon"></span><b>Mystery song</b></div>
+                <div class="flip-face flip-back"><b>2003</b><span>Crazy In Love</span><small>Beyoncé, JAY-Z</small></div>
+              </div>
+            </div>
+            <div class="correct-note">Correct placement</div>
+          </div>
+          <p>The mystery card turns over to reveal its year and metadata in one contained motion.</p>
+        </article>
+
+        <article class="variant" data-demo="reveal-scan">
+          <header><div><span class="variant-name">C · Timeline scan</span></div><button class="replay" type="button">Replay</button></header>
+          <div class="demo-stage reveal-stage scan-stage">
+            <i class="scan-line"></i>
+            <div class="verdict wrong">Your placement</div>
+            <div class="reveal-card"><b>1987</b><span>Everywhere</span><small>Fleetwood Mac</small></div>
+            <div class="verdict correct">Correct position</div>
+          </div>
+          <p>A fine line travels down the timeline and resolves each marked position in order.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="earned-card" class="study-section">
+      <div class="section-heading">
+        <div><span class="section-number">04</span><h2>Adding an earned card</h2></div>
+        <p>Show the timeline growing without losing the player’s place.</p>
+      </div>
+      <div class="variant-grid">
+        <article class="variant recommended" data-demo="earn-open">
+          <header><div><span class="variant-name">A · Open and settle</span><strong>Recommended</strong></div><button class="replay" type="button">Replay</button></header>
+          <div class="demo-stage earned-stage">
+            <div class="mini-card before-card"><b>1997</b><span>Barbie Girl</span><small>Aqua</small></div>
+            <div class="mini-card earned"><b>2003</b><span>Crazy In Love</span><small>Beyoncé, JAY-Z</small></div>
+            <div class="mini-card after-card"><b>2009</b><span>I Gotta Feeling</span><small>Black Eyed Peas</small></div>
+          </div>
+          <p>The neighbours separate and the earned card grows naturally into the new space.</p>
+        </article>
+
+        <article class="variant" data-demo="earn-drop">
+          <header><div><span class="variant-name">B · Result to timeline</span></div><button class="replay" type="button">Replay</button></header>
+          <div class="demo-stage earned-stage drop-stage">
+            <div class="award-chip">You got the card</div>
+            <div class="mini-card earned"><b>2012</b><span>Treasure</span><small>Bruno Mars</small></div>
+            <div class="timeline-home">Timeline position</div>
+          </div>
+          <p>The result label contracts into a card and travels a short distance to its destination.</p>
+        </article>
+
+        <article class="variant" data-demo="earn-edge">
+          <header><div><span class="variant-name">C · Coloured edge</span></div><button class="replay" type="button">Replay</button></header>
+          <div class="demo-stage earned-stage edge-stage">
+            <div class="mini-card earned"><b>2015</b><span>The Hills</span><small>The Weeknd</small><i>Added</i></div>
+            <div class="mini-card"><b>2019</b><span>Adore You</span><small>Harry Styles</small></div>
+          </div>
+          <p>The new card slides in and its decade edge briefly carries the confirmation.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="turn-change" class="study-section">
+      <div class="section-heading">
+        <div><span class="section-number">05</span><h2>Changing turns</h2></div>
+        <p>Reorient the room quickly when the active team changes.</p>
+      </div>
+      <div class="variant-grid">
+        <article class="variant recommended" data-demo="turn-crossfade">
+          <header><div><span class="variant-name">A · Name crossfade</span><strong>Recommended</strong></div><button class="replay" type="button">Replay</button></header>
+          <div class="demo-stage turn-stage">
+            <span>Round 4</span>
+            <div class="team-swap"><b>Needle Crew</b><b>Bassline Club</b></div>
+            <div class="turn-rule"></div>
+          </div>
+          <p>The old name leaves as the next arrives, supported by one understated progress line.</p>
+        </article>
+
+        <article class="variant" data-demo="turn-wipe">
+          <header><div><span class="variant-name">B · Paper wipe</span></div><button class="replay" type="button">Replay</button></header>
+          <div class="demo-stage turn-stage wipe-stage">
+            <i></i><span>Playing for</span><b>Bassline Club</b><small>Round 4</small>
+          </div>
+          <p>A warm paper wipe resets the compact header and reveals the next team beneath it.</p>
+        </article>
+
+        <article class="variant" data-demo="turn-initial">
+          <header><div><span class="variant-name">C · Initial hand-off</span></div><button class="replay" type="button">Replay</button></header>
+          <div class="demo-stage turn-stage initial-stage">
+            <div class="team-orb"><span>N</span><span>B</span></div>
+            <div><small>Now playing</small><b>Bassline Club</b></div>
+          </div>
+          <p>The team initial rolls once while the name fades in—friendly, but still restrained.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="tokens" class="study-section">
+      <div class="section-heading">
+        <div><span class="section-number">06</span><h2>Gaining or spending tokens</h2></div>
+        <p>Make the economy legible without turning it into a slot machine.</p>
+      </div>
+      <div class="variant-grid">
+        <article class="variant recommended" data-demo="token-fly">
+          <header><div><span class="variant-name">A · Short flight</span><strong>Recommended</strong></div><button class="replay" type="button">Replay</button></header>
+          <div class="demo-stage token-stage">
+            <div class="bonus-label">Title + artist</div>
+            <i class="token"></i>
+            <div class="token-count"><small>Tokens</small><b>2</b><b>3</b></div>
+          </div>
+          <p>One token travels from the awarded action to the counter, which rolls up by one.</p>
+        </article>
+
+        <article class="variant" data-demo="token-ring">
+          <header><div><span class="variant-name">B · Counter ring</span></div><button class="replay" type="button">Replay</button></header>
+          <div class="demo-stage token-stage ring-stage">
+            <div class="ring-counter"><small>Tokens</small><b>4</b><i></i></div>
+            <span class="plus-one">+1</span>
+          </div>
+          <p>The counter stays put while a single ring and +1 provide the feedback.</p>
+        </article>
+
+        <article class="variant" data-demo="token-spend">
+          <header><div><span class="variant-name">C · Spend and dim</span></div><button class="replay" type="button">Replay</button></header>
+          <div class="demo-stage token-stage spend-stage">
+            <button class="spend-button" type="button">Request new song · 1 token</button>
+            <div class="token-row"><i></i><i></i><i></i><i></i><i></i></div>
+          </div>
+          <p>The final token quietly leaves the row as the requested action confirms.</p>
+        </article>
+      </div>
+    </section>
+
+    <footer>
+      <p>These are motion prototypes only. Timing and easing can be mixed across concepts before integration.</p>
+      <button id="play-all-footer" class="button" type="button">Replay all studies</button>
+    </footer>
+  </main>
+  <script type="module" src="/animation-lab.js"></script>
+</body>
+</html>

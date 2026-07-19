@@ -123,7 +123,9 @@ buy/replace windows.
 At phone widths, the timeline is the primary game surface. It renders as a
 full-width vertical sequence of placement gaps and song cards so every choice
 uses the natural page scroll direction and remains easy to tap. Round, team,
-card, token, phase, and current-turn context stay in a compact area above it.
+card, token, phase, current-turn context, and a compact role-switch shortcut
+stay above it. A delegated host sees `Team` in the same position where the team
+view shows `Host`. Team rosters are not repeated below the in-game timeline.
 The host follows the same hierarchy, retaining only playback controls required
 for the current song before the active timeline. Wider host and tablet screens
 may use the horizontal timeline treatment.

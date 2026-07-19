@@ -44,6 +44,14 @@ readies both teams, and covers:
 
 Spotify login itself remains interactive and requires Spotify Premium.
 
+## Motion studies
+
+Open `http://127.0.0.1:5173/animation-lab.html` to compare three replayable
+animation directions for placement, locking, result reveal, earned-card
+insertion, turn changes, and token changes. The page is an isolated design
+prototype; none of its motion is wired into the game until a direction is
+selected.
+
 ## One-window test lab
 
 Open `http://127.0.0.1:5173/test-lab` locally or

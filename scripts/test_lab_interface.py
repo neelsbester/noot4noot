@@ -80,10 +80,34 @@ def main() -> None:
                     "(element) => element.getBoundingClientRect().width "
                     "/ element.parentElement.getBoundingClientRect().width > 0.95",
                 )
+            for team in (team_a, team_b):
+                expect(team.locator("#host-controls")).to_be_visible()
+                expect(team.locator("#game-teams")).to_have_count(0)
+                assert team.locator("#host-controls").evaluate(
+                    "(button) => button.getBoundingClientRect().top "
+                    "< document.querySelector('#timeline').getBoundingClientRect().top",
+                )
 
+            team_host_box = team_a.locator("#host-controls").evaluate(
+                "(button) => ({ left: button.getBoundingClientRect().left, "
+                "right: button.getBoundingClientRect().right })",
+            )
             team_a.locator("#host-controls").click()
             team_a.locator("#controller-note").wait_for(state="visible")
             expect(team_a.locator("#back-to-team")).to_be_visible()
+            expect(team_a.locator("#back-to-team")).to_have_text("Team")
+            team_button_box = team_a.locator("#back-to-team").evaluate(
+                "(button) => ({ left: button.getBoundingClientRect().left, "
+                "right: button.getBoundingClientRect().right })",
+            )
+            assert abs(team_button_box["right"] - team_host_box["right"]) <= 1, (
+                team_host_box,
+                team_button_box,
+            )
+            assert team_a.locator("#back-to-team").evaluate(
+                "(button) => button.getBoundingClientRect().top "
+                "< document.querySelector('#timeline').getBoundingClientRect().top",
+            )
             controller_url = page.locator("#team-a-frame").evaluate(
                 "(frame) => frame.contentWindow.location.href",
             )
