@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import os
+import re
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 from playwright.sync_api import Page, expect, sync_playwright
 from test_three_phone_lab import (
@@ -36,6 +38,12 @@ def main() -> None:
     console_errors: list[str] = []
     page_errors: list[str] = []
     room = ""
+    deck_path = Path(__file__).parents[1] / "digital_game" / "decks" / "millennial-anthems.csv"
+    with deck_path.open(newline="", encoding="utf-8") as deck_file:
+        deck_years = {
+            row["spotify_url"].rsplit("/", 1)[-1]: int(row["year"])
+            for row in csv.DictReader(deck_file)
+        }
 
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
@@ -47,6 +55,21 @@ def main() -> None:
         page = context.new_page()
         observe(page, console_errors, page_errors)
         try:
+            page.goto(f"{origin}/test-phone.html?view=team-a", wait_until="domcontentloaded")
+            page.wait_for_url(re.compile(r"/team\?.*seat=lab-team-a"))
+            page.locator("#lobby").wait_for(state="visible")
+            expect(page.locator("#lobby-title")).to_contain_text("Needle Crew")
+            direct_room = parse_qs(urlparse(page.url).query)["room"][0]
+            context.request.post(
+                f"{origin}/api/admin/rooms/{direct_room}/close",
+                data={},
+                headers={
+                    "Origin": origin,
+                    "X-Noot4Noot-Admin-Email": "neelsbester1993@gmail.com",
+                    **access_headers,
+                },
+            )
+
             page.goto(f"{origin}/test-lab", wait_until="domcontentloaded")
             page.locator("#new-room").click()
             page.locator("#lab-room").wait_for(state="visible")
@@ -62,8 +85,23 @@ def main() -> None:
             team_b.locator("#lobby").wait_for(state="visible")
             expect(team_a.locator("#lobby-title")).to_contain_text("Needle Crew")
             expect(team_b.locator("#lobby-title")).to_contain_text("Bassline Club")
+            expect(page.locator("#open-host")).to_have_attribute("href", re.compile(r"seat=lab-host.*lab=1"))
+            expect(page.locator("#open-team-a")).to_have_attribute("href", re.compile(r"seat=lab-team-a"))
+            expect(page.locator("#open-team-b")).to_have_attribute("href", re.compile(r"seat=lab-team-b"))
+            with page.expect_popup() as opened_team:
+                page.locator("#open-team-a").click()
+            full_team = opened_team.value
+            observe(full_team, console_errors, page_errors)
+            full_team.locator("#lobby").wait_for(state="visible")
+            expect(full_team.locator("#lobby-title")).to_contain_text("Needle Crew")
+            full_team.close()
 
-            page.locator("#quick-start").click()
+            team_a.locator("#ready").click()
+            expect(team_a.locator("#ready")).to_have_text("Not ready yet")
+            team_b.locator("#ready").click()
+            expect(team_b.locator("#ready")).to_have_text("Not ready yet")
+            expect(host.locator("#start-game")).to_be_enabled()
+            host.locator("#start-game").click()
             host.locator("#game").wait_for(state="visible")
             team_a.locator("#game").wait_for(state="visible")
             team_b.locator("#game").wait_for(state="visible")
@@ -124,8 +162,22 @@ def main() -> None:
             active_name = host.locator("#active-team").inner_text().strip()
             active = team_a if active_name == "Needle Crew" else team_b
             rival = team_b if active is team_a else team_a
-            active.locator("#timeline .timeline-gap:not([disabled])").first.click()
+            state_response = context.request.get(
+                f"{origin}/api/rooms/{room}/state?seat=lab-host",
+                headers=access_headers,
+            )
+            assert state_response.ok
+            host_state = state_response.json()
+            track_id = host_state["round"]["song"]["spotifyUri"].rsplit(":", 1)[-1]
+            mystery_year = deck_years[track_id]
+            correct_slot = sum(song["year"] <= mystery_year for song in host_state["activeTimeline"])
+            active.locator(
+                f"#timeline .timeline-gap:not([disabled])[data-slot='{correct_slot}']",
+            ).click()
             active.locator("#lock-placement").wait_for(state="visible")
+            expect(active.locator("#timeline")).to_have_class(
+                re.compile(r"\bis-placement-focused\b"),
+            )
             active_timeline = active.locator("#timeline")
             action_bar = active.locator(".timeline-panel > .action-row")
             assert action_bar.evaluate("(element) => getComputedStyle(element).position") == "sticky"
@@ -145,11 +197,28 @@ def main() -> None:
             assert action_bar.evaluate("(element) => element.getBoundingClientRect().top <= 8")
             active_timeline.evaluate("() => window.scrollTo(0, 0)")
             active.locator("#lock-placement").click()
+            expect(active.locator("#lock-placement")).to_have_class(
+                re.compile(r"\bis-locking\b"),
+            )
             rival.locator("#pass").wait_for(state="visible")
             rival.locator("#pass").click()
             expect(host.locator("#phase")).to_have_text("revealed")
+            for phone in (host, team_a, team_b):
+                reveal_card = phone.locator("#round-reveal-card")
+                expect(reveal_card).to_be_visible()
+                expect(reveal_card).to_have_class(
+                    re.compile(r"\bmotion-reveal-flip\b"),
+                )
+                expect(reveal_card).to_have_class(
+                    re.compile(r"\bmotion-earned-card\b"),
+                )
+                expect(reveal_card.locator("[data-reveal-award]")).to_contain_text("Added to")
             expect(page.locator("#lab-phase")).to_have_text("revealed")
             expect(page.locator("#lab-status")).to_contain_text("Use Next round")
+            host.locator("#award-bonus").click()
+            expect(active.locator("#token-count")).to_have_class(
+                re.compile(r"\bmotion-token-ring\b"),
+            )
             full_host_url = page.locator("#full-host").get_attribute("href") or ""
             assert "seat=lab-host" in full_host_url
             assert "lab=1" not in full_host_url
@@ -166,11 +235,19 @@ def main() -> None:
             expect(page.locator(".device")).to_have_count(3)
             expect(page.locator(".device").last).to_be_visible()
 
+            previous_active = host.locator("#active-team").inner_text().strip()
+            host.locator("#next-round").click()
+            expect(host.locator("#phase")).to_have_text("turn start")
+            expect(host.locator("#active-team")).not_to_have_text(previous_active)
+            expect(host.locator("#active-team")).to_have_class(
+                re.compile(r"\bmotion-turn-handoff\b"),
+            )
+
             page.reload(wait_until="domcontentloaded")
             expect(page.locator("#lab-room")).to_have_text(room)
             host = page.frame_locator("#host-frame")
             host.locator("#game").wait_for(state="visible")
-            expect(host.locator("#phase")).to_have_text("revealed")
+            expect(host.locator("#phase")).to_have_text("turn start")
 
             with page.expect_popup() as opened_host:
                 page.locator("#full-host").click()
@@ -207,7 +284,9 @@ def main() -> None:
         raise SystemExit("Browser errors detected:\n" + "\n".join([*relevant_console, *page_errors]))
     print(
         f"PASS room={room} one_window=host+2_teams isolated_seats=true "
-        f"simulation=play+placement+reveal controller=team_to_host_to_team "
+        f"simulation=play+placement+reveal+bonus+next_round controller=team_to_host_to_team "
+        f"motion=focus+sweep+flip+edge+handoff+ring "
+        f"direct_launcher=team_a "
         f"phone_timeline=vertical actions=sticky_on_long_timeline "
         f"restore=frames+shell full_host=opens focus=working screenshot={args.screenshot}"
     )

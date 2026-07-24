@@ -75,6 +75,16 @@
           <article class="panel timeline-panel">
             <div class="panel-heading"><div><span class="eyebrow">Active timeline</span><h2 id="timeline-team">—</h2></div><span id="timer" class="timer"></span></div>
             <p id="round-help" class="message">Waiting for the active team.</p>
+            <article id="round-reveal-card" class="round-reveal-card" hidden aria-live="polite">
+              <div class="round-reveal-inner">
+                <div class="round-reveal-face round-reveal-front" aria-hidden="true"><span class="reveal-record"></span><strong>Mystery song</strong></div>
+                <div class="round-reveal-face round-reveal-back" data-reveal-back>
+                  <strong data-reveal-year></strong>
+                  <span><b data-reveal-title></b><small data-reveal-artist></small></span>
+                  <i class="reveal-award" data-reveal-award hidden></i>
+                </div>
+              </div>
+            </article>
             <div class="action-row">
               <button id="force-reveal" class="button" type="button" hidden>Force reveal</button>
               <button id="award-bonus" class="button" type="button" hidden>Award title + artist token</button>

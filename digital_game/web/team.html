@@ -52,6 +52,16 @@
           <article class="panel timeline-panel">
             <div class="panel-heading"><div><span class="eyebrow">Timeline</span><h2 id="timeline-title">Your cards</h2></div><span id="timer" class="timer"></span></div>
             <p id="placement-help" class="message">Your timeline will appear here.</p>
+            <article id="round-reveal-card" class="round-reveal-card" hidden aria-live="polite">
+              <div class="round-reveal-inner">
+                <div class="round-reveal-face round-reveal-front" aria-hidden="true"><span class="reveal-record"></span><strong>Mystery song</strong></div>
+                <div class="round-reveal-face round-reveal-back" data-reveal-back>
+                  <strong data-reveal-year></strong>
+                  <span><b data-reveal-title></b><small data-reveal-artist></small></span>
+                  <i class="reveal-award" data-reveal-award hidden></i>
+                </div>
+              </div>
+            </article>
             <div class="action-row">
               <button id="lock-placement" class="button primary" type="button" hidden>Lock placement</button>
               <button id="contest" class="button danger" type="button" hidden>Contest · 1 token</button>
