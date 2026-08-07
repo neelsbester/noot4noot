@@ -16,6 +16,7 @@
   --radius: 20px;
   --serif: Iowan Old Style, Baskerville, "Times New Roman", serif;
   --sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --motion-ease: cubic-bezier(0.22, 0.8, 0.28, 1);
 }
 
 * {
@@ -553,7 +554,21 @@ a {
 }
 
 .team-round-strip {
-  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto auto;
+}
+
+.host-round-strip {
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+}
+
+.team-game-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.top-role-button {
+  width: 60px;
+  min-height: 40px;
+  padding-inline: 13px;
 }
 
 .round-strip span {
@@ -746,6 +761,315 @@ a {
   background: rgb(155 73 61 / 10%);
   border-color: var(--danger);
   border-style: solid;
+}
+
+.timeline.is-placement-focused > * {
+  animation: live-focus-dim 550ms var(--motion-ease) both;
+}
+
+.timeline.is-placement-focused > .is-selected,
+.timeline.is-placement-focused > .is-challenged {
+  animation: live-focus-select 650ms var(--motion-ease) both;
+}
+
+.button.is-locking,
+.button.is-locking:disabled {
+  overflow: hidden;
+  color: transparent;
+  border-color: var(--green);
+  opacity: 1;
+  position: relative;
+}
+
+.button.is-locking-source {
+  display: none;
+}
+
+.button.is-locking::before {
+  width: 0;
+  background: var(--green);
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  animation: live-action-sweep 620ms var(--motion-ease) both;
+}
+
+.button.is-locking::after {
+  color: #fff;
+  content: "Locked ✓";
+  opacity: 0;
+  position: absolute;
+  z-index: 1;
+  animation: live-lock-label 300ms var(--motion-ease) 390ms both;
+}
+
+.round-reveal-card {
+  width: min(390px, 100%);
+  height: 118px;
+  margin: 14px 0;
+  perspective: 900px;
+}
+
+.round-reveal-inner {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  transform-style: preserve-3d;
+}
+
+.round-reveal-card.is-revealed .round-reveal-inner {
+  transform: rotateY(180deg);
+}
+
+.round-reveal-face {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  padding: 14px 16px;
+  background: var(--paper-deep);
+  border-radius: 11px;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  position: absolute;
+  inset: 0;
+}
+
+.round-reveal-front {
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 14px;
+}
+
+.round-reveal-front strong {
+  font-family: var(--serif);
+  font-size: 1.45rem;
+  font-weight: 500;
+}
+
+.reveal-record {
+  width: 54px;
+  aspect-ratio: 1;
+  background: radial-gradient(circle, var(--paper) 0 12%, var(--green) 13% 29%, var(--ink) 30%);
+  border-radius: 50%;
+}
+
+.round-reveal-back {
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 12px;
+  border-left: 7px solid var(--teal);
+  transform: rotateY(180deg);
+}
+
+.round-reveal-back > strong {
+  font-family: var(--serif);
+  font-size: 2.1rem;
+  font-weight: 500;
+}
+
+.round-reveal-back span,
+.round-reveal-back b,
+.round-reveal-back small {
+  display: block;
+  min-width: 0;
+}
+
+.round-reveal-back b {
+  overflow: hidden;
+  font-size: 0.9rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.round-reveal-back small {
+  margin-top: 4px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.76rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reveal-award {
+  padding: 4px 8px;
+  color: #fff;
+  background: var(--green);
+  border-radius: 999px;
+  font-size: 0.65rem;
+  font-style: normal;
+  font-weight: 800;
+  opacity: 0;
+  position: absolute;
+  right: 10px;
+  top: 9px;
+}
+
+.round-reveal-card.motion-reveal-flip {
+  animation: live-reveal-arrive 350ms var(--motion-ease) both;
+}
+
+.round-reveal-card.motion-reveal-flip .round-reveal-inner {
+  animation: live-card-flip 900ms var(--motion-ease) 240ms both;
+}
+
+.round-reveal-card.motion-earned-card .reveal-award {
+  animation: live-added-chip 1050ms var(--motion-ease) 1050ms both;
+}
+
+.turn-team-label {
+  display: inline-flex !important;
+  min-width: 0;
+  min-height: 27px;
+  align-items: center;
+  padding-left: 34px;
+  position: relative;
+}
+
+.turn-team-label::before,
+.turn-team-label::after {
+  display: grid;
+  width: 27px;
+  height: 27px;
+  flex: 0 0 auto;
+  color: #fff !important;
+  background: var(--green);
+  border-radius: 50%;
+  content: attr(data-current-initial);
+  place-items: center;
+  font-family: var(--serif);
+  font-size: 0.82rem;
+  font-style: normal;
+  font-weight: 600;
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.turn-team-label::before {
+  content: attr(data-previous-initial);
+  display: none;
+}
+
+.turn-team-name {
+  min-width: 0;
+  overflow: hidden;
+  color: inherit !important;
+  font: inherit !important;
+  letter-spacing: inherit !important;
+  text-overflow: ellipsis;
+  text-transform: none !important;
+  white-space: nowrap;
+}
+
+.motion-turn-handoff::before {
+  display: grid;
+  animation: live-initial-out 600ms var(--motion-ease) both;
+}
+
+.motion-turn-handoff::after {
+  animation: live-initial-in 650ms var(--motion-ease) 180ms both;
+}
+
+.motion-turn-handoff .turn-team-name {
+  animation: live-turn-copy-in 620ms var(--motion-ease) 260ms both;
+}
+
+.motion-token-ring {
+  position: relative;
+}
+
+.motion-token-ring::before {
+  border: 2px solid var(--ochre);
+  border-radius: 50%;
+  content: "";
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  inset: -9px;
+  animation: live-counter-ring 850ms var(--motion-ease) 120ms both;
+}
+
+.motion-token-ring::after {
+  color: var(--green);
+  content: attr(data-token-delta);
+  font-family: var(--sans);
+  font-size: 0.7rem;
+  font-weight: 850;
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  right: -16px;
+  top: -15px;
+  animation: live-token-delta 900ms var(--motion-ease) 160ms both;
+}
+
+.team-token-counter {
+  display: inline-block;
+}
+
+@keyframes live-focus-dim {
+  from { opacity: 1; }
+  to { opacity: 0.45; }
+}
+
+@keyframes live-focus-select {
+  0% { opacity: 0.45; box-shadow: inset 0 0 0 var(--green); }
+  55% { opacity: 1; box-shadow: inset 7px 0 0 var(--green); transform: translateX(3px); }
+  100% { opacity: 1; box-shadow: inset 4px 0 0 var(--green); transform: none; }
+}
+
+@keyframes live-action-sweep {
+  from { width: 0; }
+  to { width: 100%; }
+}
+
+@keyframes live-lock-label {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes live-reveal-arrive {
+  from { opacity: 0; transform: translateX(-22px); }
+  70% { opacity: 1; transform: translateX(3px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes live-card-flip {
+  from { transform: rotateY(0); }
+  to { transform: rotateY(180deg); }
+}
+
+@keyframes live-added-chip {
+  0% { opacity: 0; transform: translateX(8px); }
+  30%, 70% { opacity: 1; transform: none; }
+  100% { opacity: 0; transform: translateX(-5px); }
+}
+
+@keyframes live-initial-out {
+  from { opacity: 1; transform: translate(0, -50%); }
+  to { opacity: 0; transform: translate(-28px, -50%); }
+}
+
+@keyframes live-initial-in {
+  from { opacity: 0; transform: translate(28px, -50%); }
+  to { opacity: 1; transform: translate(0, -50%); }
+}
+
+@keyframes live-turn-copy-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes live-counter-ring {
+  0% { opacity: 0; transform: scale(0.75); }
+  30% { opacity: 1; }
+  100% { opacity: 0; transform: scale(1.28); }
+}
+
+@keyframes live-token-delta {
+  0% { opacity: 0; transform: translateY(8px); }
+  25%, 60% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-18px); }
 }
 
 .side-stack {
@@ -987,7 +1311,11 @@ a {
   }
 
   .team-round-strip {
-    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+  }
+
+  .host-round-strip {
+    grid-template-columns: auto minmax(0, 1fr) auto;
   }
 
   .round-strip .status-pill {
@@ -1012,6 +1340,12 @@ a {
 
   .round-strip output {
     font-size: 1rem;
+  }
+
+  .top-role-button {
+    min-height: 36px;
+    padding: 6px 10px;
+    font-size: 0.72rem;
   }
 
   .game-grid {
@@ -1216,7 +1550,9 @@ a {
   *::after {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
+    transition-delay: 0.01ms !important;
     animation-duration: 0.01ms !important;
+    animation-delay: 0.01ms !important;
     animation-iteration-count: 1 !important;
   }
 }

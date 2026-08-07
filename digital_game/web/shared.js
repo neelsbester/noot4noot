@@ -29,7 +29,19 @@ export function randomToken(byteLength = 32) {
 }
 
 export function requestId() {
-  return crypto.randomUUID();
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = [...bytes].map((byte) => byte.toString(16).padStart(2, "0"));
+  return [
+    hex.slice(0, 4).join(""),
+    hex.slice(4, 6).join(""),
+    hex.slice(6, 8).join(""),
+    hex.slice(8, 10).join(""),
+    hex.slice(10).join(""),
+  ].join("-");
 }
 
 export async function api(path, { method = "GET", body } = {}) {
@@ -142,6 +154,8 @@ export function renderTimeline(container, songs, options = {}) {
     wrongPlacements = [],
     onSelect,
   } = options;
+  const focusPlacement = interactive && (placement !== null || challengePlacement !== null);
+  container.classList.toggle("is-placement-focused", focusPlacement);
   container.replaceChildren();
   for (let slot = 0; slot <= songs.length; slot += 1) {
     const gap = document.createElement("button");
@@ -187,6 +201,96 @@ export function renderTimeline(container, songs, options = {}) {
     details.append(title, artist);
     card.append(year, details);
     container.append(card);
+  }
+}
+
+export function snapshotMotion(previous, next) {
+  if (!previous) {
+    return {
+      reveal: false,
+      earnedCard: false,
+      turnChange: false,
+      previousActiveTeamId: null,
+      tokenDeltas: {},
+    };
+  }
+  const previousRound = previous.round;
+  const nextRound = next.round;
+  const reveal = previousRound?.phase !== "revealed" && nextRound?.phase === "revealed";
+  const tokenDeltas = Object.fromEntries(next.teams.flatMap((team) => {
+    const before = previous.teams.find((candidate) => candidate.id === team.id);
+    const delta = before ? team.tokens - before.tokens : 0;
+    return delta === 0 ? [] : [[team.id, delta]];
+  }));
+  return {
+    reveal,
+    earnedCard: reveal && nextRound?.winnerTeamId !== null,
+    turnChange: Boolean(
+      previousRound
+      && nextRound
+      && previousRound.activeTeamId !== nextRound.activeTeamId,
+    ),
+    previousActiveTeamId: previousRound?.activeTeamId ?? null,
+    tokenDeltas,
+  };
+}
+
+export function renderTurnTeam(element, currentName, previousName = currentName, animate = false, suffix = "") {
+  const label = document.createElement("span");
+  label.className = "turn-team-name";
+  label.textContent = `${currentName || "—"}${suffix}`;
+  element.dataset.previousInitial = (previousName || currentName || "—").slice(0, 1).toUpperCase();
+  element.dataset.currentInitial = (currentName || "—").slice(0, 1).toUpperCase();
+  element.classList.add("turn-team-label");
+  element.classList.toggle("motion-turn-handoff", animate);
+  element.replaceChildren(label);
+}
+
+export function renderRevealCard(root, round, winnerName, animateReveal, animateEarnedCard) {
+  const revealed = round?.phase === "revealed" && "year" in round.song;
+  root.hidden = !revealed;
+  root.classList.toggle("is-revealed", revealed);
+  root.classList.toggle("motion-reveal-flip", revealed && animateReveal);
+  root.classList.toggle("motion-earned-card", revealed && animateEarnedCard);
+  if (!revealed) return;
+
+  const back = root.querySelector("[data-reveal-back]");
+  back.className = `round-reveal-face round-reveal-back ${decadeClass(round.song.year)}`;
+  root.querySelector("[data-reveal-year]").textContent = String(round.song.year);
+  root.querySelector("[data-reveal-title]").textContent = round.song.title;
+  root.querySelector("[data-reveal-artist]").textContent = round.song.artist;
+  const award = root.querySelector("[data-reveal-award]");
+  award.hidden = !winnerName;
+  award.textContent = winnerName ? `Added to ${winnerName}` : "";
+}
+
+export async function runLockSweep(button, commit) {
+  if (button.dataset.locking === "true") return false;
+  button.dataset.locking = "true";
+  button.disabled = true;
+  button.classList.add("is-locking");
+  const confirmation = button.cloneNode(true);
+  confirmation.removeAttribute("id");
+  confirmation.removeAttribute("hidden");
+  confirmation.setAttribute("aria-hidden", "true");
+  button.after(confirmation);
+  button.classList.add("is-locking-source");
+  const originalLabel = button.getAttribute("aria-label");
+  button.setAttribute("aria-label", "Locking placement");
+  const minimumDelay = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 720;
+  try {
+    const [result] = await Promise.all([
+      commit(),
+      new Promise((resolve) => window.setTimeout(resolve, minimumDelay)),
+    ]);
+    return result;
+  } finally {
+    confirmation.remove();
+    button.classList.remove("is-locking", "is-locking-source");
+    button.disabled = false;
+    delete button.dataset.locking;
+    if (originalLabel === null) button.removeAttribute("aria-label");
+    else button.setAttribute("aria-label", originalLabel);
   }
 }
 

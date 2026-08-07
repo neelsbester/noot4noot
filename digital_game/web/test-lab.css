@@ -258,12 +258,27 @@ h1 {
   box-shadow: 0 0 0 4px rgb(63 101 77 / 10%);
 }
 
-.focus-device {
+.focus-device,
+.open-device {
   min-height: 26px;
   padding: 0 9px;
   color: var(--muted);
   background: transparent;
   font-size: 0.65rem;
+}
+
+.open-device {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.open-device[aria-disabled="true"] {
+  opacity: 0.45;
+  pointer-events: none;
 }
 
 .phone {

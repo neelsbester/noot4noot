@@ -44,6 +44,16 @@ readies both teams, and covers:
 
 Spotify login itself remains interactive and requires Spotify Premium.
 
+## Motion studies
+
+Open `http://127.0.0.1:5173/animation-lab.html` to compare three replayable
+animation directions for placement, locking, result reveal, earned-card
+insertion, turn changes, and token changes. The selected treatments are marked
+in the lab and wired into the live host/team interfaces: Focus rail, Button
+sweep, Year flip, Coloured edge, Initial hand-off, and Counter ring. They run
+only on matching state transitions and collapse to effectively instant updates
+when the operating system requests reduced motion.
+
 ## One-window test lab
 
 Open `http://127.0.0.1:5173/test-lab` locally or
@@ -57,6 +67,26 @@ normal host and team control remains directly interactive inside its frame.
 The embedded host uses silent simulated playback so placement, contest, token,
 and reveal mechanics can be tested without Spotify. `Open full host` uses the
 same host seat in a normal tab for real Spotify testing.
+
+For individual physical-phone views on the same Wi-Fi, expose local development
+with `npm run dev -- --ip 0.0.0.0` and open one of the direct launchers:
+
+```text
+http://<development-vm-ip>:5173/test-phone.html?view=host
+http://<development-vm-ip>:5173/test-phone.html?view=team-a
+http://<development-vm-ip>:5173/test-phone.html?view=team-b
+```
+
+Each URL silently provisions a fresh room and redirects to one full-screen
+simulated seat; the three-phone dashboard is never rendered. The dashboard
+remains available when coordinated control of all seats is useful, and each
+device header there also has an `Open` link. Plain-HTTP LAN access is for
+game/UI simulation only; use the HTTPS staging origin for Spotify OAuth and
+real playback.
+
+The lab smoke also verifies the selected placement, lock, reveal, earned-card,
+turn-change, and token motion contracts rather than relying on screenshot-only
+inspection.
 
 CI exercises the lab itself with:
 

@@ -7,10 +7,13 @@ import {
   formatTimer,
   performAction,
   renderTimeline,
+  renderRevealCard,
+  renderTurnTeam,
   revealPlacement,
   roomRoleUrl,
   roomFromUrl,
   seatFromUrl,
+  snapshotMotion,
   teamById,
 } from "./shared.js";
 import {
@@ -44,6 +47,7 @@ let spotifyConnected = false;
 let labPlayback = false;
 let playbackBusy = false;
 let highestSeenRevision = -1;
+let activeMotion = null;
 
 function setSection(name) {
   for (const section of ["loading", "lobby", "game", "finished"]) {
@@ -63,6 +67,16 @@ async function act(action) {
     return true;
   } catch (error) {
     await refresh();
+    if (error.code === "stale_state" && action.type === "start_game" && state?.can.startGame) {
+      try {
+        const next = await performAction(room, state, action, controllerMode);
+        await acceptSnapshot(next);
+        return true;
+      } catch (retryError) {
+        toast(retryError.message);
+        return false;
+      }
+    }
     toast(error.message);
     return false;
   }
@@ -79,9 +93,18 @@ function makeTeamRow(team, removable = false) {
   const name = document.createElement("strong");
   name.textContent = team.name;
   const detail = document.createElement("small");
-  detail.textContent = state.room.status === "lobby"
-    ? (team.ready ? "Ready to play" : "Not ready yet")
-    : `${team.cardCount} / ${state.room.settings.targetCards} cards · ${team.tokens} tokens`;
+  if (state.room.status === "lobby") {
+    detail.textContent = team.ready ? "Ready to play" : "Not ready yet";
+  } else {
+    detail.append(`${team.cardCount} / ${state.room.settings.targetCards} cards · `);
+    const tokenCount = document.createElement("span");
+    tokenCount.className = "team-token-counter";
+    tokenCount.textContent = `${team.tokens} tokens`;
+    const tokenDelta = activeMotion?.tokenDeltas[team.id] ?? 0;
+    tokenCount.classList.toggle("motion-token-ring", tokenDelta !== 0);
+    tokenCount.dataset.tokenDelta = tokenDelta > 0 ? `+${tokenDelta}` : String(tokenDelta);
+    detail.append(tokenCount);
+  }
   main.append(name, detail);
   row.append(initial, main);
   if (state.room.status === "lobby") {
@@ -117,6 +140,7 @@ function renderLobby() {
   elements["join-url"].textContent = joinUrl;
   renderTeamList(elements["lobby-teams"], true);
   elements["start-game"].disabled = !state.can.startGame;
+  elements["start-game"].textContent = "Start game";
   elements["lobby-help"].textContent = state.teams.length < 2
     ? "At least two teams must join."
     : state.teams.every((team) => team.ready)
@@ -142,7 +166,13 @@ function renderGame() {
   const revealed = round.phase === "revealed";
   const [title, copy] = roundCopy(round, active, challenger);
   elements["round-number"].textContent = String(round.number);
-  elements["active-team"].textContent = active?.name || "—";
+  const previousActive = teamById(state, activeMotion?.previousActiveTeamId);
+  renderTurnTeam(
+    elements["active-team"],
+    active?.name || "—",
+    previousActive?.name,
+    Boolean(activeMotion?.turnChange),
+  );
   elements.phase.textContent = round.phase.replaceAll("_", " ");
   elements["stage-title"].textContent = title;
   elements["stage-copy"].textContent = copy;
@@ -160,6 +190,14 @@ function renderGame() {
     challengePlacement: round.challengePlacement,
     ...reveal,
   });
+  const winner = teamById(state, round.winnerTeamId);
+  renderRevealCard(
+    elements["round-reveal-card"],
+    round,
+    winner?.name || "",
+    Boolean(activeMotion?.reveal),
+    Boolean(activeMotion?.earnedCard),
+  );
   elements["round-help"].textContent = copy;
   elements["force-reveal"].hidden = !state.can.forceReveal;
   elements["award-bonus"].hidden = !state.can.awardTitleArtistBonus;
@@ -256,8 +294,10 @@ async function acceptSnapshot(next) {
   if (next.room.revision < highestSeenRevision || next.room.revision < (state?.room.revision ?? -1)) {
     return false;
   }
+  activeMotion = snapshotMotion(state, next);
   state = next;
   render();
+  activeMotion = null;
   return true;
 }
 
@@ -342,7 +382,12 @@ elements["copy-join"].addEventListener("click", async () => {
   await copyText(elements["join-url"].textContent);
   toast("Room address copied.");
 });
-elements["start-game"].addEventListener("click", () => void act({ type: "start_game" }));
+elements["start-game"].addEventListener("click", async () => {
+  elements["start-game"].disabled = true;
+  elements["start-game"].textContent = "Starting…";
+  const started = await act({ type: "start_game" });
+  if (!started && state?.room.status === "lobby") renderLobby();
+});
 elements["force-reveal"].addEventListener("click", () => void act({ type: "force_reveal" }));
 elements["award-bonus"].addEventListener("click", () => void act({ type: "award_title_artist_bonus" }));
 elements["next-round"].addEventListener("click", () => void act({ type: "next_round" }));

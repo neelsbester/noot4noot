@@ -2,9 +2,24 @@ import { requestId } from "./shared.js";
 
 const LAB_ROOM_KEY = "noot4noot_test_lab_room";
 const seats = {
-  host: { seat: "lab-host", role: "host", frame: document.querySelector("#host-frame") },
-  teamA: { seat: "lab-team-a", role: "team", frame: document.querySelector("#team-a-frame") },
-  teamB: { seat: "lab-team-b", role: "team", frame: document.querySelector("#team-b-frame") },
+  host: {
+    seat: "lab-host",
+    role: "host",
+    frame: document.querySelector("#host-frame"),
+    open: document.querySelector("#open-host"),
+  },
+  teamA: {
+    seat: "lab-team-a",
+    role: "team",
+    frame: document.querySelector("#team-a-frame"),
+    open: document.querySelector("#open-team-a"),
+  },
+  teamB: {
+    seat: "lab-team-b",
+    role: "team",
+    frame: document.querySelector("#team-b-frame"),
+    open: document.querySelector("#open-team-b"),
+  },
 };
 
 const roomOutput = document.querySelector("#lab-room");
@@ -21,7 +36,12 @@ let room = "";
 let polling = false;
 
 function localAdminHeaders() {
-  return ["127.0.0.1", "localhost"].includes(window.location.hostname)
+  const hostname = window.location.hostname;
+  const localNetwork = ["127.0.0.1", "localhost"].includes(hostname)
+    || hostname.startsWith("10.")
+    || hostname.startsWith("192.168.")
+    || /^172\.(1[6-9]|2\d|3[01])\./u.test(hostname);
+  return localNetwork
     ? { "X-Noot4Noot-Admin-Email": "neelsbester1993@gmail.com" }
     : {};
 }
@@ -69,9 +89,11 @@ function loadFrames() {
   seats.host.frame.src = frameUrl("host", seats.host.seat, true);
   seats.teamA.frame.src = frameUrl("team", seats.teamA.seat);
   seats.teamB.frame.src = frameUrl("team", seats.teamB.seat);
-  for (const { frame } of Object.values(seats)) {
+  for (const { frame, open, role, seat } of Object.values(seats)) {
     frame.closest(".device").classList.add("is-online");
     frame.parentElement.querySelector(".empty-state").hidden = true;
+    open.href = frameUrl(role, seat, role === "host");
+    open.setAttribute("aria-disabled", "false");
   }
   fullHostLink.href = frameUrl("host", seats.host.seat);
   fullHostLink.setAttribute("aria-disabled", "false");

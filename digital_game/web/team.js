@@ -5,9 +5,13 @@ import {
   formatTimer,
   performAction,
   renderTimeline,
+  renderRevealCard,
+  renderTurnTeam,
   revealPlacement,
   roomRoleUrl,
   roomFromUrl,
+  runLockSweep,
+  snapshotMotion,
   teamById,
 } from "./shared.js";
 
@@ -22,6 +26,7 @@ let selectedChallengePlacement = null;
 let stopUpdates = null;
 let timerHandle = null;
 let highestSeenRevision = -1;
+let activeMotion = null;
 
 function self() {
   return teamById(state, state?.viewer.teamId);
@@ -124,8 +129,18 @@ function renderGame() {
   elements["turn-copy"].textContent = copy;
   elements["card-count"].textContent = String(team?.cardCount ?? 0);
   elements["token-count"].textContent = String(team?.tokens ?? 0);
-  elements["timeline-title"].textContent = `${active?.name || "Active"} timeline`;
+  const previousActive = teamById(state, activeMotion?.previousActiveTeamId);
+  renderTurnTeam(
+    elements["timeline-title"],
+    active?.name || "Active",
+    previousActive?.name,
+    Boolean(activeMotion?.turnChange),
+    " timeline",
+  );
   elements["host-controls"].href = roomRoleUrl("host", room, { mode: "controller" });
+  const tokenDelta = activeMotion?.tokenDeltas[team?.id] ?? 0;
+  elements["token-count"].classList.toggle("motion-token-ring", tokenDelta !== 0);
+  elements["token-count"].dataset.tokenDelta = tokenDelta > 0 ? `+${tokenDelta}` : String(tokenDelta);
 
   const canPlace = state.can.place;
   const canChallengePlace = state.can.placeChallenge;
@@ -146,6 +161,14 @@ function renderGame() {
       }
     },
   });
+  const winner = teamById(state, round.winnerTeamId);
+  renderRevealCard(
+    elements["round-reveal-card"],
+    round,
+    winner?.name || "",
+    Boolean(activeMotion?.reveal),
+    Boolean(activeMotion?.earnedCard),
+  );
 
   elements["placement-help"].textContent = copy;
   elements["buy-card"].hidden = !state.can.buyRandomCard;
@@ -154,7 +177,6 @@ function renderGame() {
   elements.contest.hidden = !state.can.contest;
   elements.pass.hidden = !state.can.passChallenge;
   elements["lock-challenge"].hidden = !state.can.lockChallenge;
-  elements["game-teams"].replaceChildren(...state.teams.map(teamRow));
   updateTimer();
 }
 
@@ -202,10 +224,12 @@ function acceptSnapshot(next) {
   }
   highestSeenRevision = Math.max(highestSeenRevision, next.room.revision);
   if (state && next.room.revision === state.room.revision) return false;
+  activeMotion = snapshotMotion(state, next);
   state = next;
   selectedPlacement = state.round?.placement ?? null;
   selectedChallengePlacement = state.round?.challengePlacement ?? null;
   render();
+  activeMotion = null;
   return true;
 }
 
@@ -222,10 +246,16 @@ elements["buy-card"].addEventListener("click", () => void act({ type: "buy_rando
 elements["replace-song"].addEventListener("click", () => {
   if (window.confirm("Spend one token and discard this song?")) void act({ type: "replace_song", teamId: state.viewer.teamId });
 });
-elements["lock-placement"].addEventListener("click", () => void act({ type: "lock_placement", teamId: state.viewer.teamId }));
+elements["lock-placement"].addEventListener("click", () => void runLockSweep(
+  elements["lock-placement"],
+  () => act({ type: "lock_placement", teamId: state.viewer.teamId }),
+));
 elements.contest.addEventListener("click", () => void act({ type: "contest", teamId: state.viewer.teamId }));
 elements.pass.addEventListener("click", () => void act({ type: "pass_challenge", teamId: state.viewer.teamId }));
-elements["lock-challenge"].addEventListener("click", () => void act({ type: "lock_challenge", teamId: state.viewer.teamId }));
+elements["lock-challenge"].addEventListener("click", () => void runLockSweep(
+  elements["lock-challenge"],
+  () => act({ type: "lock_challenge", teamId: state.viewer.teamId }),
+));
 
 async function start() {
   if (!room) {

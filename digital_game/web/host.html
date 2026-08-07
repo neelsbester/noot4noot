@@ -41,6 +41,7 @@
       <div class="round-strip host-round-strip">
         <div><span>Round</span><strong id="round-number">1</strong></div>
         <div><span>Playing for</span><strong id="active-team">—</strong></div>
+        <button id="back-to-team" class="button compact top-role-button" type="button" hidden>Team</button>
         <span id="phase" class="status-pill" aria-live="polite">Turn start</span>
       </div>
       <div class="game-grid">
@@ -74,6 +75,16 @@
           <article class="panel timeline-panel">
             <div class="panel-heading"><div><span class="eyebrow">Active timeline</span><h2 id="timeline-team">—</h2></div><span id="timer" class="timer"></span></div>
             <p id="round-help" class="message">Waiting for the active team.</p>
+            <article id="round-reveal-card" class="round-reveal-card" hidden aria-live="polite">
+              <div class="round-reveal-inner">
+                <div class="round-reveal-face round-reveal-front" aria-hidden="true"><span class="reveal-record"></span><strong>Mystery song</strong></div>
+                <div class="round-reveal-face round-reveal-back" data-reveal-back>
+                  <strong data-reveal-year></strong>
+                  <span><b data-reveal-title></b><small data-reveal-artist></small></span>
+                  <i class="reveal-award" data-reveal-award hidden></i>
+                </div>
+              </div>
+            </article>
             <div class="action-row">
               <button id="force-reveal" class="button" type="button" hidden>Force reveal</button>
               <button id="award-bonus" class="button" type="button" hidden>Award title + artist token</button>
@@ -87,13 +98,6 @@
           <article class="panel">
             <div class="panel-heading"><div><span class="eyebrow">Scoreboard</span><h2>Teams</h2></div></div>
             <div id="game-teams" class="team-list"></div>
-          </article>
-          <article class="panel">
-            <span class="eyebrow">Host controls</span>
-            <p class="muted">Any team device may open these controls. Only this original host can start Spotify playback.</p>
-            <div class="action-row">
-              <button id="back-to-team" class="button full" type="button" hidden>Back to team view</button>
-            </div>
           </article>
         </aside>
       </div>

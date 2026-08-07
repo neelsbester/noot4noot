@@ -123,10 +123,23 @@ buy/replace windows.
 At phone widths, the timeline is the primary game surface. It renders as a
 full-width vertical sequence of placement gaps and song cards so every choice
 uses the natural page scroll direction and remains easy to tap. Round, team,
-card, token, phase, and current-turn context stay in a compact area above it.
+card, token, phase, current-turn context, and a compact role-switch shortcut
+stay above it. A delegated host sees `Team` in the same position where the team
+view shows `Host`. Team rosters are not repeated below the in-game timeline.
 The host follows the same hierarchy, retaining only playback controls required
 for the current song before the active timeline. Wider host and tablet screens
 may use the horizontal timeline treatment.
+
+## Motion behavior
+
+Live motion is derived from consecutive authoritative room snapshots rather
+than optimistic game-state changes. Placement focus may respond to the current
+team's selected slot, while reveal, earned-card, turn-change, and token
+animations run only when their corresponding persisted transition appears in a
+new revision. The locking sweep provides immediate local confirmation while
+the lock mutation is submitted; its temporary confirmation survives the
+authoritative rerender long enough to remain legible. All motion keeps final
+content visible without animation and honors `prefers-reduced-motion`.
 
 ## Three-phone test lab
 
@@ -179,6 +192,7 @@ Durable Object namespaces.
   purchase/play/replace, placement, contest/pass, reveal, next round, delegated
   controls, and owner invite creation.
 - A separate Playwright check drives the visible one-window test lab through
-  provisioning, quick start, simulated playback, placement, pass, reveal, and
-  hard assertions that all three phone timelines use the vertical layout.
+  provisioning, manual team readiness and host start, simulated playback,
+  placement, pass, reveal, and hard assertions that all three phone timelines
+  use the vertical layout.
 - Responsive screenshots and hard width assertions cover 390×844 phones.
